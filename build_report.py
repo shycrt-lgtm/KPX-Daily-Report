@@ -15,7 +15,7 @@ if not GEMINI_KEY:
     raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
 genai.configure(api_key=GEMINI_KEY)
 
-# 오늘 기준 D-1 (예: 9월 23일 실행 시 9월 22일 데이터)
+# 오늘 기준 D-1
 target_dt = datetime.now() - timedelta(days=1)
 target_date_str = target_dt.strftime("%Y%m%d")
 display_date = target_dt.strftime("%Y년 %m월 %d일")
@@ -32,7 +32,7 @@ actual_demand = [55100, 52800, 51400, 51600, 54500, 59400, 62100, 62800, 61500, 
 
 land_smp = [100.2, 97.5, 97.5, 97.45, 101.5, 102.4, 104.5, 109.5, 103.8, 103.5, 103.5, 103.4, 104.8, 108.5, 110.2, 183.48, 183.83, 183.74, 183.48, 183.48, 130.69, 128.5, 112.5, 105.4]
 
-# 누적형 차트용 발전량 (아래서부터: 원자력 -> 석탄 -> 기타 -> LNG -> 풍력 -> 태양광)
+# 누적형 차트용 발전량
 gen_nuclear = [20670]*24
 gen_coal = [20541, 20120, 20340, 20850, 21200, 21500, 22100, 22500, 21500, 20100, 19364, 21500, 23400, 25500, 26466, 27116, 27404, 26500, 25643, 25471, 24800, 23500, 22100, 21000]
 gen_other = [-1057, -1200, -1500, -1800, -2100, -1500, -500, 0, -1500, -3500, -4711, -2500, -682, 227, 1734, 3443, 4100, 4273, 3450, 2500, 1500, 800, -500, -800]
@@ -53,7 +53,7 @@ recent_7days = [
     {"date": "9.21(월)", "avg": 98.83, "max": 111.93, "min": 6.31, "cap": 94154, "peak": 66528, "time": "20시", "res": 41.5},
     {"date": "9.22(화)", "avg": 126.08, "max": 183.83, "min": 97.45, "cap": 98874, "peak": 76817, "time": "19시", "res": 28.7}
 ]
-reversed_7days = list(reversed(recent_7days)) # 최신순(내림차순)
+reversed_7days = list(reversed(recent_7days))
 
 avg_smp = round(sum(land_smp) / len(land_smp), 2)
 max_smp = max(land_smp)
@@ -68,9 +68,8 @@ diff_avg_smp = round(avg_smp - prev_avg_smp, 2)
 diff_max_smp = round(max_smp - recent_7days[-2]['max'], 2)
 
 # =====================================================================
-# 3. Gemini AI 보고서 요약 (팩트 기반 객관적 서술형)
+# 3. Gemini AI 보고서 요약
 # =====================================================================
-# 3-1. 메인 Executive Summary
 prompt_main = f"""
 당신은 글로벌 전략 컨설팅 펌(McKinsey)의 에너지 파트너입니다.
 아래 데이터를 바탕으로 C-level 임원을 위한 '일일 전력시장 요약'을 작성하세요.
@@ -84,23 +83,4 @@ prompt_main = f"""
 [작성 가이드]
 1. 팩트(Fact) 기반으로 객관적 현상을 우선 서술하며, 단 하루 실적만으로 구조적 변화를 과도하게 단정짓지 말 것.
 2. 평소 패턴과 다른 급변동이나 특이 수치(Outlier)가 있을 경우에만 신중하게 분석 의견 및 시사점을 추가할 것.
-3. 반드시 모든 문장은 명사형/단어 종결형(개조식)으로 끝낼 것 (예: ~관찰됨, ~수준임, ~판단됨).
-4. 출력 형식은 HTML <ul> 및 <li> 태그만 사용.
-"""
-
-# 3-2. 발전원 수급 분석 (차트4 하단용)
-prompt_chart4 = f"""
-당신은 전력시장 분석가입니다.
-금일 '발전원별 수급 구성 및 순부하(Net Load)' 현황에 대한 의견을 1~2문장의 개조식(명사 종결형)으로 작성하세요.
-- 데이터: 신재생(태양광+풍력) 최대 {max(gen_vre)}MW, 순부하 최저 {min(net_load)}MW
-- 가이드: 팩트 위주의 분석(예: 주간 발전량 증가로 순부하 하락함 등)을 HTML 없이 순수 텍스트로만 출력.
-"""
-
-try:
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    # 메인 요약
-    res_main = model.generate_content(prompt_main)
-    ai_summary = res_main.text.replace("```html", "").replace("```", "").strip()
-    # 차트4 수급 분석
-    res_chart4 = model.generate_content(prompt_chart4)
-    ai_gen_summary = res_chart4.text.replace("```html", "").replace("
+3. 반드시 모든 문장은 명사형/단어 종결형(개조식)으로 끝낼 것 (예: ~관찰됨, ~
