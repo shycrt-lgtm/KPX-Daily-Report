@@ -15,7 +15,7 @@ if not GEMINI_KEY:
     raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
 genai.configure(api_key=GEMINI_KEY)
 
-# 오늘 기준 D-1
+# 오늘 기준 D-1 
 target_dt = datetime.now() - timedelta(days=1)
 target_date_str = target_dt.strftime("%Y%m%d")
 display_date = target_dt.strftime("%Y년 %m월 %d일")
@@ -83,4 +83,21 @@ prompt_main = f"""
 [작성 가이드]
 1. 팩트(Fact) 기반으로 객관적 현상을 우선 서술하며, 단 하루 실적만으로 구조적 변화를 과도하게 단정짓지 말 것.
 2. 평소 패턴과 다른 급변동이나 특이 수치(Outlier)가 있을 경우에만 신중하게 분석 의견 및 시사점을 추가할 것.
-3. 반드시 모든 문장은 명사형/단어 종결형(개조식)으로 끝낼 것 (예: ~관찰됨, ~
+3. 반드시 모든 문장은 명사형/단어 종결형(개조식)으로 끝낼 것 (예: ~관찰됨, ~수준임, ~판단됨).
+4. 출력 형식은 HTML <ul> 및 <li> 태그만 사용.
+"""
+
+prompt_chart4 = f"""
+당신은 전력시장 분석가입니다.
+금일 '발전원별 수급 구성 및 순부하(Net Load)' 현황에 대한 의견을 1~2문장의 개조식(명사 종결형)으로 작성하세요.
+- 데이터: 신재생(태양광+풍력) 최대 {max(gen_vre)}MW, 순부하 최저 {min(net_load)}MW
+- 가이드: 팩트 위주의 분석(예: 주간 발전량 증가로 순부하 하락함 등)을 HTML 없이 순수 텍스트로만 출력.
+"""
+
+try:
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    res_main = model.generate_content(prompt_main)
+    ai_summary = res_main.text.replace('```html', '').replace('```', '').strip()
+    
+    res_chart4 = model.generate_content(prompt_chart4)
+    ai_gen_summary = res_chart4.text.replace('```html', '').replace('
