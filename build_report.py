@@ -12,10 +12,10 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 DATA_GO_KR_KEY = os.environ.get("DATA_GO_KR_KEY")
 
 if not GEMINI_KEY:
-    raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
+    raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다. GitHub Secrets를 확인해주세요.")
+
 genai.configure(api_key=GEMINI_KEY)
 
-# 오늘 기준 D-1 
 target_dt = datetime.now() - timedelta(days=1)
 target_date_str = target_dt.strftime("%Y%m%d")
 display_date = target_dt.strftime("%Y년 %m월 %d일")
@@ -32,7 +32,6 @@ actual_demand = [55100, 52800, 51400, 51600, 54500, 59400, 62100, 62800, 61500, 
 
 land_smp = [100.2, 97.5, 97.5, 97.45, 101.5, 102.4, 104.5, 109.5, 103.8, 103.5, 103.5, 103.4, 104.8, 108.5, 110.2, 183.48, 183.83, 183.74, 183.48, 183.48, 130.69, 128.5, 112.5, 105.4]
 
-# 누적형 차트용 발전량
 gen_nuclear = [20670]*24
 gen_coal = [20541, 20120, 20340, 20850, 21200, 21500, 22100, 22500, 21500, 20100, 19364, 21500, 23400, 25500, 26466, 27116, 27404, 26500, 25643, 25471, 24800, 23500, 22100, 21000]
 gen_other = [-1057, -1200, -1500, -1800, -2100, -1500, -500, 0, -1500, -3500, -4711, -2500, -682, 227, 1734, 3443, 4100, 4273, 3450, 2500, 1500, 800, -500, -800]
