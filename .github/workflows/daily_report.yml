@@ -2,9 +2,8 @@ name: Daily Power Market Report
 
 on:
   schedule:
-    # 매일 한국 시간 오전 08:30 (UTC 기준 23:30) 자동 실행
+    # 매일 한국 시간 오전 08:30 (UTC 23:30) 자동 실행
     - cron: '30 23 * * *'
-  # 필요할 때 수동으로 즉시 실행 버튼을 누를 수 있도록 설정
   workflow_dispatch:
 
 jobs:
@@ -22,11 +21,12 @@ jobs:
 
       - name: 필수 라이브러리 설치
         run: |
-          pip install google-generativeai
+          pip install google-generativeai requests
 
       - name: 전력시장 보고서 생성 스크립트 실행
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: |
           python build_report.py
 
