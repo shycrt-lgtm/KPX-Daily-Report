@@ -38,6 +38,15 @@ for _, row in df_smp.iterrows():
     }
 print(f"SMP 로딩 완료: {len(smp_dict)}일")
 
+# 1-1. 월별 가중평균 SMP 사전 계산 (전월 평균 SMP 산출용)
+monthly_smp_dict = {}
+smp_months = set(k[:6] for k in smp_dict.keys())
+for ym in smp_months:
+    month_days = [v['avg'] for k, v in smp_dict.items() if k.startswith(ym)]
+    if month_days:
+        monthly_smp_dict[ym] = round(sum(month_days) / len(month_days), 2)
+print(f"월별 평균 SMP 집계 완료: {len(monthly_smp_dict)}개월")
+
 # 2. 일별 최대부하 및 예비율 로딩
 cap_candidates = glob.glob("*최대부하*.csv") + glob.glob("*최대부하*.xlsx")
 if not cap_candidates:
@@ -63,7 +72,7 @@ for _, row in df_cap.iterrows():
     }
 print(f"수급실적 로딩 완료: {len(cap_dict)}일")
 
-# 3. 수요예측 로딩 (Timestamp 완벽 대응)
+# 3. 수요예측 로딩 (pssInland_YYYY.xlsx - Timestamp 대응)
 pred_dict = {}
 for pf in sorted(glob.glob("pssInland_*.xlsx")):
     df_p = pd.read_excel(pf, header=None)
@@ -91,38 +100,43 @@ for pf in sorted(glob.glob("pssInland_*.xlsx")):
                 pred_dict[d_val] = vals[:24]
 print(f"수요예측 로딩 완료: {len(pred_dict)}일")
 
-# 4. LNG 단가 로딩 정밀화 (병합 해제된 정규화 엑셀용)
+# 4. LNG 단가 로딩
 lng_dict = {}
 lng_candidates = glob.glob("*LNG*.xlsx") + [f for f in glob.glob("*.xlsx") if "5." in f]
 if lng_candidates:
     lng_file = lng_candidates[0]
     print(f"LNG 단가 파일 로딩 중: {lng_file}")
+    df_lng = pd.read_excel(lng_file, sheet_name="입방당", header=None)
     
-    # 엑셀 로딩 (첫 번째 줄을 컬럼 헤더로 사용)
-    df_lng = pd.read_excel(lng_file, sheet_name="입방당")
-    
-    for r_idx, row in df_lng.iterrows():
-        # A열(연도)과 B열(구분) 데이터 추출
-        col0_raw = str(row.iloc[0]).replace('.0', '').strip()
-        col1_raw = str(row.iloc[1]).replace(' ', '')
-        
-        # A열이 4자리 연도이고, B열에 '합계'가 포함된 행만 핀셋 추출
-        if col0_raw.isdigit() and len(col0_raw) == 4 and "합계" in col1_raw:
-            current_year = int(col0_raw)
+    # 1~12월 컬럼 위치 파악
+    month_cols = {}
+    for r in range(min(15, len(df_lng))):
+        row_vals = [str(x).replace('.0','').replace('월','').strip() for x in df_lng.iloc[r]]
+        found = {m: row_vals.index(str(m)) for m in range(1, 13) if str(m) in row_vals}
+        if len(found) >= 10:
+            month_cols = found
+            break
             
-            # 1월(C열, 인덱스2)부터 12월(N열, 인덱스13)까지 반복
-            for m in range(1, 13):
-                col_idx = m + 1
-                if col_idx < len(row):
-                    val = row.iloc[col_idx]
-                    try:
-                        val_num = float(str(val).replace(',', '').strip())
-                        if val_num > 0:
-                            lng_dict[f"{current_year}{m:02d}"] = val_num
-                    except:
-                        pass
-
-print(f"LNG 단가 로딩 완료: 총 {len(lng_dict)}개월 데이터 확보 -> {lng_dict}")
+    current_year = None
+    for r in range(len(df_lng)):
+        row_strs = [str(x).replace(' ', '') for x in df_lng.iloc[r]]
+        
+        for cell in row_strs:
+            c_clean = cell.replace('.0', '')
+            if c_clean.isdigit() and len(c_clean) == 4 and int(c_clean) >= 2000:
+                current_year = int(c_clean)
+                break
+                
+        if any("합계" in c for c in row_strs) and current_year:
+            for m, c_idx in month_cols.items():
+                val = df_lng.iloc[r, c_idx]
+                try:
+                    v = float(str(val).replace(',', '').strip())
+                    if v > 0:
+                        lng_dict[f"{current_year}{m:02d}"] = v
+                except:
+                    pass
+print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 데이터 확보")
 
 # 5. 발전원별 발전량 연도별 로딩 및 집계
 gen_dict = {}
@@ -185,14 +199,26 @@ for gf in gen_files:
             'actual_demand': [round(v, 1) for v in act_demand]
         }
 
+print(f"발전원 집계 완료: {len(gen_dict)}일")
+
 common_dates = sorted(list(set(smp_dict.keys()) & set(gen_dict.keys()) & set(cap_dict.keys())))
 latest_date_str = common_dates[-1]
 latest_dt = datetime.strptime(latest_date_str, "%Y%m%d")
 latest_date_dashed = latest_dt.strftime("%Y-%m-%d")
+print(f">> 최종 생성 대상 일수: {len(common_dates)}일 (최신일자: {latest_date_str})")
 
 hours = [f"{i}시" for i in range(1, 25)]
 json_hours = json.dumps(hours)
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
+
+# 변동 표기 헬퍼 함수 (상승은 +, 하락은 ▼)
+def format_diff(val):
+    if val > 0:
+        return f"+{abs(val):.2f}원", "text-rose-600"
+    elif val < 0:
+        return f"▼{abs(val):.2f}원", "text-blue-600"
+    else:
+        return "- 0.00원", "text-slate-500"
 
 for target_date_str in common_dates:
     dt = datetime.strptime(target_date_str, "%Y%m%d")
@@ -207,14 +233,22 @@ for target_date_str in common_dates:
     
     lng_price = lng_dict.get(ym_str, 0.0)
     prev_lng_price = lng_dict.get(prev_ym_str, 0.0)
+    prev_month_smp = monthly_smp_dict.get(prev_ym_str, 0.0)
     
     if lng_price > 0 and prev_lng_price > 0:
-        diff_lng = round(lng_price - prev_lng_price, 2)
-        diff_lng_color = "text-rose-600" if diff_lng > 0 else ("text-blue-600" if diff_lng < 0 else "text-slate-600")
-        diff_lng_text = f"전월비 {diff_lng:+}원"
+        diff_lng_val = round(lng_price - prev_lng_price, 2)
+        if diff_lng_val > 0:
+            diff_lng_text = f"전월비 +{abs(diff_lng_val):.2f}원"
+            diff_lng_color = "text-rose-600"
+        elif diff_lng_val < 0:
+            diff_lng_text = f"전월비 ▼{abs(diff_lng_val):.2f}원"
+            diff_lng_color = "text-blue-600"
+        else:
+            diff_lng_text = "전월비 변동없음"
+            diff_lng_color = "text-slate-500"
     else:
-        diff_lng_color = "text-slate-400"
         diff_lng_text = "-"
+        diff_lng_color = "text-slate-400"
 
     s_info = smp_dict[target_date_str]
     land_smp = s_info['hourly']
@@ -224,7 +258,7 @@ for target_date_str in common_dates:
     max_smp_idx = land_smp.index(max_smp)
     min_smp_idx = land_smp.index(min_smp)
     
-    # SMP 피크 구간 보정 (전 구간 피크 오류 방지)
+    # 피크 밴드 보정 (전 구간 피크 오류 방지)
     smp_thresh = min_smp + (max_smp - min_smp) * 0.85
     left = max_smp_idx
     while left > 0 and land_smp[left-1] >= smp_thresh: left -= 1
@@ -265,10 +299,18 @@ for target_date_str in common_dates:
                 'res': cap_dict[prev_d]['res']
             })
             
-    diff_avg_smp = round(avg_smp - recent_7[1]['avg'], 2) if len(recent_7) > 1 else 0.0
-    diff_max_smp = round(max_smp - recent_7[1]['max'], 2) if len(recent_7) > 1 else 0.0
-    diff_avg_color = "text-rose-600" if diff_avg_smp > 0 else "text-blue-600"
-    diff_max_color = "text-rose-600" if diff_max_smp > 0 else "text-blue-600"
+    if len(recent_7) > 1:
+        diff_avg_val = round(avg_smp - recent_7[1]['avg'], 2)
+        diff_max_val = round(max_smp - recent_7[1]['max'], 2)
+        diff_min_val = round(min_smp - recent_7[1]['min'], 2)
+        
+        diff_avg_txt, diff_avg_color = format_diff(diff_avg_val)
+        diff_max_txt, diff_max_color = format_diff(diff_max_val)
+        diff_min_txt, diff_min_color = format_diff(diff_min_val)
+    else:
+        diff_avg_txt, diff_avg_color = "-", "text-slate-400"
+        diff_max_txt, diff_max_color = "-", "text-slate-400"
+        diff_min_txt, diff_min_color = "-", "text-slate-400"
     
     table_rows_html = ""
     for i, r in enumerate(recent_7):
@@ -282,10 +324,11 @@ for target_date_str in common_dates:
         </tr>
         """
         
+    prev_smp_str = f"{prev_month_smp:.2f}원/kWh" if prev_month_smp > 0 else "-"
     ai_summary = f"""
     <ul>
-      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 {max_peak_actual:,}MW({peak_hour_str}) 및 최고 SMP {max_smp:.2f}원/kWh가 {peak_band_label} 구간에 관찰됨.</li>
-      <li><strong>시장 동향:</strong> 가중평균 SMP는 {avg_smp:.2f}원/kWh(전일비 {diff_avg_smp:+}원)이며, 당월 적용 LNG 단가는 {lng_price:,.1f}원/Nm³({diff_lng_text}), 공급예비율 {reserve_ratio:.1f}% 수준임.</li>
+      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 {max_peak_actual:,}MW({peak_hour_str}) 및 최고 SMP {max_smp:.2f}원/kWh가 {peak_band_label} 구간에 형성됨.</li>
+      <li><strong>시장 동향:</strong> 가중평균 SMP는 {avg_smp:.2f}원/kWh(전일비 {diff_avg_txt})이며, 당월 적용 LNG 단가는 {lng_price:,.2f}원/Nm³({diff_lng_text}, 전월평균 SMP: {prev_smp_str}), 공급예비율 {reserve_ratio:.1f}% 수준임.</li>
       <li><strong>발전원 구성:</strong> 기저발전(원자력·석탄) 중심 위에 주간 태양광 출력 정점 및 저녁 피크 LNG 램핑 대응 패턴이 확인됨.</li>
     </ul>
     """
@@ -329,20 +372,22 @@ for target_date_str in common_dates:
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
         <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">{display_date}</strong> | 육지 기준 종합 실적</p>
       </div>
+
       <div class="flex flex-col md:items-end gap-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
           <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 수급현황">
             <span>⚡ 실시간 수급현황</span>
             <svg class="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
           <a href="https://new.kpx.or.kr/smpInland.es?mid=a10404080100&device=pc" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition" title="KPX 당일 시간대별 SMP">
             <span>📈 실시간 SMP</span>
             <svg class="w-3 h-3 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
         </div>
+
         <div class="flex flex-wrap items-center gap-2">
           {latest_button_html}
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
@@ -372,39 +417,47 @@ for target_date_str in common_dates:
             <span class="text-2xl font-black text-slate-800">{lng_price:,.2f}</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
           </div>
           <p class="text-[11px] font-semibold mt-1 {diff_lng_color}">{diff_lng_text}</p>
+          <p class="text-[10px] text-slate-500 mt-0.5 font-medium">전월평균 SMP: <span class="font-bold text-slate-700">{prev_smp_str}</span></p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">가중평균 SMP</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-slate-900">{avg_smp:.2f}</span><span class="text-xs font-medium pb-1">원</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 {diff_avg_color}">전일비 {diff_avg_smp:+}원</p>
+          <p class="text-[11px] font-semibold mt-1 {diff_avg_color}">전일비 {diff_avg_txt}</p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-rose-50/30">
           <p class="text-xs font-bold text-slate-500 mb-1">최고 SMP</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-[#d93f3c]">{max_smp:.2f}</span><span class="text-xs font-medium pb-1">원</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 {diff_max_color}">전일비 {diff_max_smp:+}원</p>
+          <p class="text-[11px] font-semibold mt-1 {diff_max_color}">전일비 {diff_max_txt}</p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">최저 SMP</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-slate-900">{min_smp:.2f}</span><span class="text-xs font-medium pb-1">원</span>
           </div>
+          <p class="text-[11px] font-semibold mt-1 {diff_min_color}">전일비 {diff_min_txt}</p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">최대전력 (피크)</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-slate-900">{max_peak_actual:,}</span><span class="text-xs font-medium pb-1">MW</span>
           </div>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">피크 발생시간</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-slate-900">{peak_hour_str}</span>
           </div>
         </div>
+
         <div class="p-4 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">공급예비율</p>
           <div class="flex items-end gap-1">
@@ -507,8 +560,6 @@ for target_date_str in common_dates:
     Chart.register(crosshairPlugin);
 
     const labels = {json_hours};
-    
-    // 차트 위쪽 라벨 잘림 방지용 Padding 강제 추가
     const commonOptions = {{
       responsive: true, maintainAspectRatio: false,
       layout: {{ padding: {{ top: 35, right: 15 }} }},
