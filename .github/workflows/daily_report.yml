@@ -1,15 +1,14 @@
-name: Daily Power Market Report
+name: Run Backfill 2022 to Present
 
 on:
-  schedule:
-    # 매일 한국 시간 오전 08:30 (UTC 23:30) 자동 실행
-    - cron: '30 23 * * *'
   workflow_dispatch:
 
-jobs:
-  build-and-report:
-    runs-on: ubuntu-latest
+permissions:
+  contents: write
 
+jobs:
+  run-backfill:
+    runs-on: ubuntu-latest
     steps:
       - name: 저장소 코드 가져오기
         uses: actions/checkout@v4
@@ -19,20 +18,26 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 필수 라이브러리 설치
+      - name: 필수 패키지 설치
         run: |
-          pip install google-generativeai requests
+          pip install pandas openpyxl numpy
 
-      - name: 전력시장 보고서 생성 스크립트 실행
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+      - name: 과거 데이터 일괄 백필 실행
         run: |
-          python build_report.py
+          python backfill_generator.py
 
-      - name: 생성된 HTML 보고서 다운로드 보관 (Artifacts)
-        uses: actions/upload-artifact@v4
-        with:
-          name: daily-power-report
-          path: "*.html"
-          retention-days: 30
+      - name: 가장 최신 리포트를 index.html로 복사 (메인 접속용)
+        run: |
+          LATEST_FILE=$(ls -t daily_report_*.html | head -n 1)
+          if [ -n "$LATEST_FILE" ]; then
+            cp "$LATEST_FILE" index.html
+            echo "Latest file $LATEST_FILE copied to index.html"
+          fi
+
+      - name: 생성된 HTML 파일 자동 커밋 및 푸시
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add daily_report_*.html index.html
+          git commit -m "Auto Backfill: 2022년 이후 일일 리포트 일괄 생성 완료" || echo "변경사항 없음"
+          git push
