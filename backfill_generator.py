@@ -72,36 +72,7 @@ for _, row in df_cap.iterrows():
     }
 print(f"수급실적 로딩 완료: {len(cap_dict)}일")
 
-# 3. 수요예측 로딩 (날짜 객체 및 텍스트 날짜 완벽 대응)
-pred_dict = {}
-for pf in sorted(glob.glob("pssInland_*.xlsx")):
-    df_p = pd.read_excel(pf, header=None)
-    for r in range(len(df_p)):
-        row = df_p.iloc[r]
-        raw_date = row.iloc[0]
-        if pd.isna(raw_date):
-            continue
-        
-        d_val = ""
-        if isinstance(raw_date, datetime):
-            d_val = raw_date.strftime("%Y%m%d")
-        else:
-            c_str = str(raw_date).replace('-', '').replace('.', '').replace('/', '').split(' ')[0]
-            if len(c_str) >= 8 and c_str[:8].isdigit():
-                d_val = c_str[:8]
-        
-        if len(d_val) == 8:
-            vals = []
-            for v in row.iloc[1:]:
-                try:
-                    vals.append(float(str(v).replace(',', '').strip()))
-                except:
-                    pass
-            if len(vals) >= 24:
-                pred_dict[d_val] = vals[:24]
-print(f"수요예측 로딩 완료: {len(pred_dict)}일")
-
-# 4. LNG 단가 로딩
+# 3. LNG 단가 로딩
 lng_dict = {}
 lng_candidates = glob.glob("*LNG*.xlsx") + [f for f in glob.glob("*.xlsx") if "5." in f]
 if lng_candidates:
@@ -109,7 +80,6 @@ if lng_candidates:
     print(f"LNG 단가 파일 로딩 중: {lng_file}")
     df_lng = pd.read_excel(lng_file, sheet_name="입방당", header=None)
     
-    # 1~12월 컬럼 위치 파악
     month_cols = {}
     for r in range(min(15, len(df_lng))):
         row_vals = [str(x).replace('.0','').replace('월','').strip() for x in df_lng.iloc[r]]
@@ -139,7 +109,7 @@ if lng_candidates:
                     pass
 print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 데이터 확보")
 
-# 5. 발전원별 발전량 연도별 로딩 및 집계
+# 4. 발전원별 발전량 연도별 로딩 및 집계
 gen_dict = {}
 gen_files = sorted(glob.glob("*발전원별 발전량_*.xlsx"))
 for gf in gen_files:
@@ -212,7 +182,7 @@ hours = [f"{i}시" for i in range(1, 25)]
 json_hours = json.dumps(hours)
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 
-# 변동 표기 헬퍼 함수 (상승: +, 하락: ▼)
+# 변동 표기 헬퍼 (상승: +, 하락: ▼)
 def format_diff(val):
     if val > 0:
         return f"+{abs(val):.2f}원", "text-rose-600"
@@ -259,7 +229,7 @@ for target_date_str in common_dates:
     max_smp_idx = land_smp.index(max_smp)
     min_smp_idx = land_smp.index(min_smp)
     
-    # 피크 밴드 보정 (전 구간 피크 오류 방지)
+    # 피크 밴드 보정 (중심점 기준 최대 5~6시간)
     smp_thresh = min_smp + (max_smp - min_smp) * 0.85
     left = max_smp_idx
     while left > 0 and land_smp[left-1] >= smp_thresh: left -= 1
@@ -272,19 +242,16 @@ for target_date_str in common_dates:
         
     p_start = left
     p_end = right
-    peak_band_label = f"{p_start+1}~{p_end+1}시 피크"
+    peak_band_label = f"{p_start+1}~{p_end+1}시"
     
     g_info = gen_dict[target_date_str]
     actual_demand = g_info['actual_demand']
-    forecast_demand = pred_dict.get(target_date_str, actual_demand)
-    demand_diff = [round(a - f, 1) for a, f in zip(actual_demand, forecast_demand)]
     
     c_info = cap_dict[target_date_str]
     max_peak_actual = c_info['peak']
     peak_hour_str = c_info['time']
     reserve_ratio = c_info['res']
     
-    # 최근 7일 실적 및 전일비 계산
     recent_7 = []
     for delta in range(7):
         prev_d = (dt - timedelta(days=delta)).strftime("%Y%m%d")
@@ -327,11 +294,16 @@ for target_date_str in common_dates:
         """
         
     prev_smp_str = f"{prev_month_smp:.2f}원/kWh" if prev_month_smp > 0 else "-"
+    
+    # 00. Executive Summary (요청하신 3대 구성: 수급지표, 가격지표, 전원구성)
     ai_summary = f"""
-    <ul>
-      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 {max_peak_actual:,}MW({peak_hour_str}) 및 최고 SMP {max_smp:.2f}원/kWh가 {peak_band_label} 구간에 형성됨.</li>
-      <li><strong>시장 동향:</strong> 가중평균 SMP는 {avg_smp:.2f}원/kWh(전일비 {diff_avg_txt})이며, 당월 적용 LNG 단가는 {lng_price:,.2f}원/Nm³({diff_lng_text}, 전월평균 SMP: {prev_smp_str}), 공급예비율 {reserve_ratio:.1f}% 수준임.</li>
-      <li><strong>발전원 구성:</strong> 기저발전(원자력·석탄) 중심 위에 주간 태양광 출력 정점 및 저녁 피크 LNG 램핑 대응 패턴이 확인됨.</li>
+    <ul class="space-y-2">
+      <li><strong>수급지표 :</strong> 최대전력수요 {peak_hour_str} 발생, 최대전력수요 {max_peak_actual:,}MW, 공급예비율 {reserve_ratio:.1f}%</li>
+      <li>
+        <strong>가격지표 :</strong> 가중평균 SMP {avg_smp:.2f}원/kWh(전일대비 {diff_avg_txt}), 피크구간 {peak_band_label}<br>
+        <span class="pl-4 text-slate-600 block mt-1">- 당월 적용 LNG 단가: {lng_price:,.2f}원/Nm³({diff_lng_text}), 전월 평균 SMP: {prev_smp_str}</span>
+      </li>
+      <li><strong>전원구성 :</strong> 기저발전(원자력·석탄) 안정적 발전 지속, 주간 태양광 출력 집중으로 순부하 최저 형성 후 저녁 피크 시 LNG 및 양수·ESS 가동 대응</li>
     </ul>
     """
     ai_gen_summary = f"주간 태양광 발전량 증가로 순부하 최저점을 형성하였으며, 일몰 후 저녁 피크 램핑 수요를 LNG 및 양수/ESS가 안정적으로 전담함."
@@ -349,7 +321,7 @@ for target_date_str in common_dates:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일일 전력시장 종합 리포트</title>
+  <title>전력시장 전일실적 요약</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -369,17 +341,18 @@ for target_date_str in common_dates:
 </head>
 <body class="p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-8">
+    <!-- 헤더 영역 -->
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
-        <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
-        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">{display_date}</strong> | 육지 기준 종합 실적</p>
+        <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
+        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">{display_date}</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
       </div>
 
       <div class="flex flex-col md:items-end gap-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
           <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 수급현황">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 발전원별 수급현황">
             <span>⚡ 실시간 수급현황</span>
             <svg class="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
@@ -403,6 +376,7 @@ for target_date_str in common_dates:
       </div>
     </div>
 
+    <!-- 00. Executive Summary -->
     <div>
       <h2>00. Executive Summary</h2>
       <div class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium summary-box">
@@ -410,6 +384,7 @@ for target_date_str in common_dates:
       </div>
     </div>
 
+    <!-- 01. 전일 전력시장 실적요약 -->
     <div>
       <h2>01. 전일 전력시장 실적요약</h2>
       <div class="grid grid-cols-2 md:grid-cols-7 gap-0 border border-slate-200">
@@ -469,11 +444,13 @@ for target_date_str in common_dates:
       </div>
     </div>
 
+    <!-- 02. SMP 차트 -->
     <div>
       <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
       <div class="chart-container"><canvas id="smpChart"></canvas></div>
     </div>
 
+    <!-- 03. 최근 7일 테이블 -->
     <div>
       <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
       <div class="overflow-x-auto">
@@ -491,6 +468,7 @@ for target_date_str in common_dates:
       </div>
     </div>
 
+    <!-- 04. 발전원별 구성 차트 -->
     <div>
       <h2>04. 발전원별 실시간 수급 구성 및 순부하</h2>
       <div class="chart-container"><canvas id="generationChart"></canvas></div>
@@ -499,28 +477,24 @@ for target_date_str in common_dates:
       </div>
     </div>
 
+    <!-- 05. 주요 발전원 라인 차트 -->
     <div>
       <h2>05. 주요 발전원 시간대별 출력 추이 (SMP 피크 밴드 중첩)</h2>
       <div class="chart-container"><canvas id="sourceLineChart"></canvas></div>
     </div>
 
+    <!-- 06. SMP 스프레드 -->
     <div>
       <h2>06. SMP 스프레드</h2>
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
       <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
     </div>
 
+    <!-- 07. 전력시장 시간대별 수요 실적 추이 -->
     <div>
-      <h2>07. 하루전 수요예측 vs 전력시장 수요 실적</h2>
-      <div class="border border-slate-200 p-4 bg-white space-y-4">
-        <div>
-          <span class="text-xs font-bold text-slate-500 block mb-1">■ 전력수요 추이 (단위: MW)</span>
-          <div class="relative h-[280px] w-full"><canvas id="demandLineChart"></canvas></div>
-        </div>
-        <div class="border-t border-slate-100 pt-3">
-          <span class="text-xs font-bold text-slate-500 block mb-1">■ 실적 - 예측 오차 (단위: MW)</span>
-          <div class="relative h-[160px] w-full"><canvas id="demandDiffBarChart"></canvas></div>
-        </div>
+      <h2>07. 전력시장 시간대별 수요 실적 추이</h2>
+      <div class="chart-container">
+        <canvas id="demandLineChart"></canvas>
       </div>
     </div>
   </div>
@@ -582,7 +556,7 @@ for target_date_str in common_dates:
     const dynamicPeakAnnotation = {{
       type: 'box', xMin: {p_start}, xMax: {p_end},
       backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
-      label: {{ display: true, content: '{peak_band_label}', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }}
+      label: {{ display: true, content: '{peak_band_label} 피크', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }}
     }};
 
     new Chart(document.getElementById('smpChart'), {{
@@ -670,20 +644,10 @@ for target_date_str in common_dates:
       data: {{
         labels: labels,
         datasets: [
-          {{ label: '하루전 수요예측', data: {json.dumps(forecast_demand)}, pointStyle: 'line', borderColor: '#005587', borderDash: [5,5], borderWidth: 2, pointRadius: 0, tension: 0.3 }},
-          {{ label: '전력시장 수요실적', data: {json.dumps(actual_demand)}, pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }}
+          {{ label: '전력시장 수요실적 (MW)', data: {json.dumps(actual_demand)}, pointStyle: 'line', borderColor: '#001f3f', backgroundColor: 'rgba(0, 31, 63, 0.05)', fill: true, borderWidth: 3, pointRadius: 2, pointHoverRadius: 5, tension: 0.2 }}
         ]
       }},
       options: {{ ...commonOptions }}
-    }});
-
-    new Chart(document.getElementById('demandDiffBarChart'), {{
-      type: 'bar',
-      data: {{
-        labels: labels,
-        datasets: [{{ label: '실적 - 예측 오차 (MW)', data: {json.dumps(demand_diff)}, pointStyle: 'rect', backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: '#2563eb', borderWidth: 1 }}]
-      }},
-      options: {{ ...commonOptions, scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }} }} }} }}
     }});
   </script>
 </body>
