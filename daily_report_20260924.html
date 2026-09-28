@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일일 전력시장 종합 리포트</title>
+  <title>전력시장 전일실적 요약</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -23,17 +23,18 @@
 </head>
 <body class="p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-8">
+    <!-- 헤더 영역 -->
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
-        <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
-        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">2026년 09월 24일(목)</strong> | 육지 기준 종합 실적</p>
+        <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
+        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">2026년 09월 24일(목)</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
       </div>
 
       <div class="flex flex-col md:items-end gap-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
           <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 수급현황">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 발전원별 수급현황">
             <span>⚡ 실시간 수급현황</span>
             <svg class="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
@@ -62,19 +63,24 @@
       </div>
     </div>
 
+    <!-- 00. Executive Summary -->
     <div>
       <h2>00. Executive Summary</h2>
       <div class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium summary-box">
         
-    <ul>
-      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 59,601MW(19:00) 및 최고 SMP 111.43원/kWh가 16~20시 피크 구간에 형성됨.</li>
-      <li><strong>시장 동향:</strong> 가중평균 SMP는 101.99원/kWh(전일비 ▼0.31원)이며, 당월 적용 LNG 단가는 1,058.34원/Nm³(전월비 +88.73원, 전월평균 SMP: 147.88원/kWh), 공급예비율 52.9% 수준임.</li>
-      <li><strong>발전원 구성:</strong> 기저발전(원자력·석탄) 중심 위에 주간 태양광 출력 정점 및 저녁 피크 LNG 램핑 대응 패턴이 확인됨.</li>
+    <ul class="space-y-2">
+      <li><strong>수급지표 :</strong> 최대전력수요 19:00 발생, 최대전력수요 59,601MW, 공급예비율 52.9%</li>
+      <li>
+        <strong>가격지표 :</strong> 가중평균 SMP 101.99원/kWh(전일대비 ▼0.31원), 피크구간 16~20시<br>
+        <span class="pl-4 text-slate-600 block mt-1">- 당월 적용 LNG 단가: 1,058.34원/Nm³(전월비 +88.73원), 전월 평균 SMP: 147.88원/kWh</span>
+      </li>
+      <li><strong>전원구성 :</strong> 기저발전(원자력·석탄) 안정적 발전 지속, 주간 태양광 출력 집중으로 순부하 최저 형성 후 저녁 피크 시 LNG 및 양수·ESS 가동 대응</li>
     </ul>
     
       </div>
     </div>
 
+    <!-- 01. 전일 전력시장 실적요약 -->
     <div>
       <h2>01. 전일 전력시장 실적요약</h2>
       <div class="grid grid-cols-2 md:grid-cols-7 gap-0 border border-slate-200">
@@ -134,11 +140,13 @@
       </div>
     </div>
 
+    <!-- 02. SMP 차트 -->
     <div>
       <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
       <div class="chart-container"><canvas id="smpChart"></canvas></div>
     </div>
 
+    <!-- 03. 최근 7일 테이블 -->
     <div>
       <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
       <div class="overflow-x-auto">
@@ -198,6 +206,7 @@
       </div>
     </div>
 
+    <!-- 04. 발전원별 구성 차트 -->
     <div>
       <h2>04. 발전원별 실시간 수급 구성 및 순부하</h2>
       <div class="chart-container"><canvas id="generationChart"></canvas></div>
@@ -206,28 +215,24 @@
       </div>
     </div>
 
+    <!-- 05. 주요 발전원 라인 차트 -->
     <div>
       <h2>05. 주요 발전원 시간대별 출력 추이 (SMP 피크 밴드 중첩)</h2>
       <div class="chart-container"><canvas id="sourceLineChart"></canvas></div>
     </div>
 
+    <!-- 06. SMP 스프레드 -->
     <div>
       <h2>06. SMP 스프레드</h2>
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
       <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
     </div>
 
+    <!-- 07. 전력시장 시간대별 수요 실적 추이 -->
     <div>
-      <h2>07. 하루전 수요예측 vs 전력시장 수요 실적</h2>
-      <div class="border border-slate-200 p-4 bg-white space-y-4">
-        <div>
-          <span class="text-xs font-bold text-slate-500 block mb-1">■ 전력수요 추이 (단위: MW)</span>
-          <div class="relative h-[280px] w-full"><canvas id="demandLineChart"></canvas></div>
-        </div>
-        <div class="border-t border-slate-100 pt-3">
-          <span class="text-xs font-bold text-slate-500 block mb-1">■ 실적 - 예측 오차 (단위: MW)</span>
-          <div class="relative h-[160px] w-full"><canvas id="demandDiffBarChart"></canvas></div>
-        </div>
+      <h2>07. 전력시장 시간대별 수요 실적 추이</h2>
+      <div class="chart-container">
+        <canvas id="demandLineChart"></canvas>
       </div>
     </div>
   </div>
@@ -377,20 +382,10 @@
       data: {
         labels: labels,
         datasets: [
-          { label: '하루전 수요예측', data: [54158.7, 52117.1, 50561.6, 49557.4, 47926.0, 47543.0, 47562.3, 46345.7, 44918.3, 43776.2, 44589.8, 45301.1, 45865.1, 47443.2, 48713.2, 50314.8, 52113.2, 54694.4, 56534.5, 56486.7, 55382.4, 53806.3, 51948.5, 49767.5], pointStyle: 'line', borderColor: '#005587', borderDash: [5,5], borderWidth: 2, pointRadius: 0, tension: 0.3 },
-          { label: '전력시장 수요실적', data: [54158.7, 52117.1, 50561.6, 49557.4, 47926.0, 47543.0, 47562.3, 46345.7, 44918.3, 43776.2, 44589.8, 45301.1, 45865.1, 47443.2, 48713.2, 50314.8, 52113.2, 54694.4, 56534.5, 56486.7, 55382.4, 53806.3, 51948.5, 49767.5], pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+          { label: '전력시장 수요실적 (MW)', data: [54158.7, 52117.1, 50561.6, 49557.4, 47926.0, 47543.0, 47562.3, 46345.7, 44918.3, 43776.2, 44589.8, 45301.1, 45865.1, 47443.2, 48713.2, 50314.8, 52113.2, 54694.4, 56534.5, 56486.7, 55382.4, 53806.3, 51948.5, 49767.5], pointStyle: 'line', borderColor: '#001f3f', backgroundColor: 'rgba(0, 31, 63, 0.05)', fill: true, borderWidth: 3, pointRadius: 2, pointHoverRadius: 5, tension: 0.2 }
         ]
       },
       options: { ...commonOptions }
-    });
-
-    new Chart(document.getElementById('demandDiffBarChart'), {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{ label: '실적 - 예측 오차 (MW)', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], pointStyle: 'rect', backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: '#2563eb', borderWidth: 1 }]
-      },
-      options: { ...commonOptions, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' } } } }
     });
   </script>
 </body>
