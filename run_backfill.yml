@@ -1,0 +1,35 @@
+name: 2022년 이후 과거 데이터 일괄 생성(Backfill)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 코드 가져오기
+        uses: actions/checkout@v4
+
+      - name: 파이썬 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 필수 라이브러리 설치
+        run: |
+          pip install pandas openpyxl numpy
+
+      - name: 과거 데이터 일괄 백필 실행
+        run: |
+          python backfill_generator.py
+
+      - name: 생성된 HTML 파일 자동 커밋 및 푸시
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add daily_report_*.html
+          git commit -m "Auto Backfill: 2022년 이후 일일 리포트 일괄 생성 완료" || echo "변경사항 없음"
+          git push
