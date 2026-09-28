@@ -28,20 +28,22 @@
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
         <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">2024년 10월 04일(금)</strong> | 육지 기준 종합 실적</p>
       </div>
+
       <div class="flex flex-col md:items-end gap-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
           <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 수급현황">
             <span>⚡ 실시간 수급현황</span>
             <svg class="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
           <a href="https://new.kpx.or.kr/smpInland.es?mid=a10404080100&device=pc" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition" title="KPX 당일 시간대별 SMP">
             <span>📈 실시간 SMP</span>
             <svg class="w-3 h-3 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
         </div>
+
         <div class="flex flex-wrap items-center gap-2">
           
       <a href="daily_report_20260927.html" 
@@ -65,8 +67,8 @@
       <div class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium summary-box">
         
     <ul>
-      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 66,048MW(19:00) 및 최고 SMP 139.44원/kWh가 15~19시 피크 구간에 관찰됨.</li>
-      <li><strong>시장 동향:</strong> 가중평균 SMP는 114.36원/kWh(전일비 +0.24원)이며, 당월 적용 LNG 단가는 0.0원/Nm³(-), 공급예비율 31.0% 수준임.</li>
+      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 66,048MW(19:00) 및 최고 SMP 139.44원/kWh가 15~19시 피크 구간에 형성됨.</li>
+      <li><strong>시장 동향:</strong> 가중평균 SMP는 114.36원/kWh(전일비 +0.24원)이며, 당월 적용 LNG 단가는 855.07원/Nm³(전월비 ▼27.72원, 전월평균 SMP: 137.90원/kWh), 공급예비율 31.0% 수준임.</li>
       <li><strong>발전원 구성:</strong> 기저발전(원자력·석탄) 중심 위에 주간 태양광 출력 정점 및 저녁 피크 LNG 램핑 대응 패턴이 확인됨.</li>
     </ul>
     
@@ -79,10 +81,12 @@
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-slate-50">
           <p class="text-xs font-bold text-slate-500 mb-1">LNG 단가 (당월)</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-800">0.00</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
+            <span class="text-2xl font-black text-slate-800">855.07</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 text-slate-400">-</p>
+          <p class="text-[11px] font-semibold mt-1 text-blue-600">전월비 ▼27.72원</p>
+          <p class="text-[10px] text-slate-500 mt-0.5 font-medium">전월평균 SMP: <span class="font-bold text-slate-700">137.90원/kWh</span></p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">가중평균 SMP</p>
           <div class="flex items-end gap-1">
@@ -90,31 +94,37 @@
           </div>
           <p class="text-[11px] font-semibold mt-1 text-rose-600">전일비 +0.24원</p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-rose-50/30">
           <p class="text-xs font-bold text-slate-500 mb-1">최고 SMP</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-[#d93f3c]">139.44</span><span class="text-xs font-medium pb-1">원</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 text-blue-600">전일비 -1.28원</p>
+          <p class="text-[11px] font-semibold mt-1 text-blue-600">전일비 ▼1.28원</p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">최저 SMP</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-slate-900">78.12</span><span class="text-xs font-medium pb-1">원</span>
           </div>
+          <p class="text-[11px] font-semibold mt-1 text-blue-600">전일비 ▼8.92원</p>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">최대전력 (피크)</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-slate-900">66,048</span><span class="text-xs font-medium pb-1">MW</span>
           </div>
         </div>
+
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">피크 발생시간</p>
           <div class="flex items-end gap-1">
             <span class="text-2xl font-black text-slate-900">19:00</span>
           </div>
         </div>
+
         <div class="p-4 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">공급예비율</p>
           <div class="flex items-end gap-1">
@@ -259,8 +269,6 @@
     Chart.register(crosshairPlugin);
 
     const labels = ["1\uc2dc", "2\uc2dc", "3\uc2dc", "4\uc2dc", "5\uc2dc", "6\uc2dc", "7\uc2dc", "8\uc2dc", "9\uc2dc", "10\uc2dc", "11\uc2dc", "12\uc2dc", "13\uc2dc", "14\uc2dc", "15\uc2dc", "16\uc2dc", "17\uc2dc", "18\uc2dc", "19\uc2dc", "20\uc2dc", "21\uc2dc", "22\uc2dc", "23\uc2dc", "24\uc2dc"];
-    
-    // 차트 위쪽 라벨 잘림 방지용 Padding 강제 추가
     const commonOptions = {
       responsive: true, maintainAspectRatio: false,
       layout: { padding: { top: 35, right: 15 } },
