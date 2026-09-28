@@ -173,6 +173,68 @@ latest_dt = datetime.strptime(latest_date_str, "%Y%m%d")
 latest_date_dashed = latest_dt.strftime("%Y-%m-%d")
 print(f">> 최종 생성 대상 일수: {len(common_dates)}일 (최신일자: {latest_date_str})")
 
+# 대한민국 법정 공휴일 및 대체공휴일 마스터 딕셔너리 (2022~2027+)
+korean_holidays = {
+    # 2022년
+    '20220101': '신정', '20220131': '설날연휴', '20220201': '설날', '20220202': '설날연휴',
+    '20220301': '삼일절', '20220309': '대통령선거', '20220505': '어린이날', '20220508': '부처님오신날',
+    '20220601': '지방선거', '20220606': '현충일', '20220815': '광복절', '20220909': '추석연휴',
+    '20220910': '추석', '20220911': '추석연휴', '20220912': '대체공휴일', '20221003': '개천절',
+    '20221009': '한글날', '20221010': '대체공휴일', '20221225': '성탄절',
+    # 2023년
+    '20230101': '신정', '20230121': '설날연휴', '20230122': '설날', '20230123': '설날연휴',
+    '20230124': '대체공휴일', '20230301': '삼일절', '20230505': '어린이날', '20230527': '부처님오신날',
+    '20230529': '대체공휴일', '20230606': '현충일', '20230815': '광복절', '20230928': '추석연휴',
+    '20230929': '추석', '20230930': '추석연휴', '20231002': '임시공휴일', '20231003': '개천절',
+    '20231009': '한글날', '20231225': '성탄절',
+    # 2024년
+    '20240101': '신정', '20240209': '설날연휴', '20240210': '설날', '20240211': '설날연휴',
+    '20240212': '대체공휴일', '20240301': '삼일절', '20240410': '국회의원선거', '20240505': '어린이날',
+    '20240506': '대체공휴일', '20240515': '부처님오신날', '20240606': '현충일', '20240815': '광복절',
+    '20240916': '추석연휴', '20240917': '추석', '20240918': '추석연휴', '20241001': '임시공휴일(국군의날)',
+    '20241003': '개천절', '20241009': '한글날', '20241225': '성탄절',
+    # 2025년
+    '20250101': '신정', '20250128': '설날연휴', '20250129': '설날', '20250130': '설날연휴',
+    '20250301': '삼일절', '20250303': '대체공휴일', '20250505': '어린이날', '20250506': '대체공휴일',
+    '20250606': '현충일', '20250815': '광복절', '20251003': '개천절', '20251005': '추석연휴',
+    '20251006': '추석', '20251007': '추석연휴', '20251008': '대체공휴일', '20251009': '한글날',
+    '20251225': '성탄절',
+    # 2026년
+    '20260101': '신정', '20260216': '설날연휴', '20260217': '설날', '20260218': '설날연휴',
+    '20260301': '삼일절', '20260302': '대체공휴일', '20260505': '어린이날', '20260524': '부처님오신날',
+    '20260525': '대체공휴일', '20260603': '지방선거', '20260606': '현충일', '20260815': '광복절',
+    '20260817': '대체공휴일', '20260924': '추석연휴', '20260925': '추석', '20260926': '추석연휴',
+    '20261003': '개천절', '20261005': '대체공휴일', '20261009': '한글날', '20261225': '성탄절',
+    # 2027년
+    '20270101': '신정', '20270206': '설날연휴', '20270207': '설날', '20270208': '설날연휴',
+    '20270209': '대체공휴일', '20270301': '삼일절', '20270303': '대통령선거', '20270505': '어린이날',
+    '20270513': '부처님오신날', '20270606': '현충일', '20270815': '광복절', '20270816': '대체공휴일',
+    '20270914': '추석연휴', '20270915': '추석', '20270916': '추석연휴', '20271003': '개천절',
+    '20271004': '대체공휴일', '20271009': '한글날', '20271011': '대체공휴일', '20271225': '성탄절'
+}
+
+# 공휴일 및 주말 판별 헬퍼 (미래 연도 고정공휴일 자동 판별 포함)
+def is_korean_holiday_or_weekend(d_str):
+    d_obj = datetime.strptime(d_str, "%Y%m%d")
+    # 주말 (토=5, 일=6)
+    if d_obj.weekday() in [5, 6]:
+        return True, "주말"
+    if d_str in korean_holidays:
+        return True, korean_holidays[d_str]
+    # 미래 연도 고정 공휴일 자동 대응
+    md = d_str[4:]
+    fixed_holidays = {
+        '0101': '신정', '0301': '삼일절', '0505': '어린이날', '0606': '현충일',
+        '0815': '광복절', '1003': '개천절', '1009': '한글날', '1225': '성탄절'
+    }
+    if md in fixed_holidays:
+        return True, fixed_holidays[md]
+    return False, ""
+
+# 클라이언트 자바스크립트 달력용 공휴일 리스트 (YYYY-MM-DD)
+holiday_dashed_list = [f"{k[:4]}-{k[4:6]}-{k[6:]}" for k in korean_holidays.keys()]
+json_holidays_js = json.dumps(holiday_dashed_list)
+
 hours = [f"{i}시" for i in range(1, 25)]
 json_hours = json.dumps(hours)
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
@@ -189,6 +251,12 @@ def format_diff(val):
 for target_date_str in common_dates:
     dt = datetime.strptime(target_date_str, "%Y%m%d")
     w_kr = weekday_kr_list[dt.weekday()]
+    is_holiday, h_name = is_korean_holiday_or_weekend(target_date_str)
+    
+    # 주말 및 공휴일이면 날짜와 배지를 빨간색으로 표기
+    date_color_cls = "text-rose-600" if is_holiday else "text-slate-800"
+    badge_color_cls = "text-rose-600 bg-rose-50 border-rose-200" if is_holiday else "text-slate-500 bg-white border-slate-200"
+    badge_title = f'title="{h_name}"' if h_name else ""
     display_date = f"{dt.strftime('%Y년 %m월 %d일')}({w_kr})"
     target_date_dashed = dt.strftime("%Y-%m-%d")
     
@@ -250,8 +318,10 @@ for target_date_str in common_dates:
         prev_d = (dt - timedelta(days=delta)).strftime("%Y%m%d")
         if prev_d in smp_dict and prev_d in cap_dict:
             p_dt = datetime.strptime(prev_d, "%Y%m%d")
+            p_is_hol, _ = is_korean_holiday_or_weekend(prev_d)
             recent_7.append({
                 'date': f"{p_dt.month}.{p_dt.day}({weekday_kr_list[p_dt.weekday()]})",
+                'is_holiday': p_is_hol,
                 'avg': smp_dict[prev_d]['avg'],
                 'max': smp_dict[prev_d]['max'],
                 'min': smp_dict[prev_d]['min'],
@@ -274,10 +344,11 @@ for target_date_str in common_dates:
         diff_max_txt, diff_max_color = "-", "text-slate-400"
         diff_min_txt, diff_min_color = "-", "text-slate-400"
     
+    # 03번 최근 7일 테이블 (주말 및 공휴일 모두 빨간색 처리)
     table_rows_html = ""
     for i, r in enumerate(recent_7):
         bg = "bg-slate-50 font-bold" if i == 0 else ""
-        txt = "text-holiday" if '토' in r['date'] or '일' in r['date'] else ""
+        txt = "text-holiday" if r['is_holiday'] else ""
         table_rows_html += f"""
         <tr class="{bg}">
             <td class="{txt}">{r['date']}</td>
@@ -318,6 +389,12 @@ for target_date_str in common_dates:
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+  
+  <!-- 공휴일/주말 빨간색 렌더링용 Flatpickr 달력 플러그인 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -327,9 +404,26 @@ for target_date_str in common_dates:
     .chart-container {{ position: relative; height: 450px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }}
     table th, table td {{ border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }}
     table th {{ background-color: #f8fafc; font-weight: 700; color: #334155; }}
-    .text-holiday {{ color: #dc2626; font-weight: 700; }}
+    .text-holiday {{ color: #dc2626 !important; font-weight: 700; }}
     h2 {{ font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }}
     .summary-box li {{ margin-bottom: 0.5rem; }}
+
+    /* 달력 팝업 내 일요일, 토요일, 대한민국 공휴일 빨간색 강제 적용 */
+    .flatpickr-calendar .flatpickr-day.holiday-day,
+    .flatpickr-calendar .flatpickr-day.weekend-day {{
+      color: #dc2626 !important;
+      font-weight: 700 !important;
+    }}
+    .flatpickr-calendar .flatpickr-day.selected.holiday-day,
+    .flatpickr-calendar .flatpickr-day.selected.weekend-day {{
+      background: #001f3f !important;
+      color: #ffffff !important;
+    }}
+    .flatpickr-calendar .flatpickr-weekday:first-child,
+    .flatpickr-calendar .flatpickr-weekday:last-child {{
+      color: #dc2626 !important;
+      font-weight: 700;
+    }}
   </style>
 </head>
 <body class="p-4 md:p-8">
@@ -338,7 +432,7 @@ for target_date_str in common_dates:
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
-        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">{display_date}</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
+        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="{date_color_cls}">{display_date}</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
       </div>
 
       <div class="flex flex-col md:items-end gap-2">
@@ -359,11 +453,10 @@ for target_date_str in common_dates:
         <div class="flex flex-wrap items-center gap-2">
           {latest_button_html}
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-            <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700">조회일자:</label>
-            <input type="date" id="historyDate" min="2022-01-01" max="{latest_date_dashed}" value="{target_date_dashed}" 
-                   class="bg-transparent text-xs md:text-sm font-bold text-slate-900 outline-none cursor-pointer"
-                   onchange="handleDateChange(this.value)">
-            <span class="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">({w_kr})</span>
+            <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
+            <input type="text" id="historyDate" value="{target_date_dashed}" 
+                   class="bg-transparent text-xs md:text-sm font-bold {date_color_cls} outline-none cursor-pointer w-24 text-center" readonly>
+            <span class="text-xs font-bold px-1.5 py-0.5 rounded border {badge_color_cls}" {badge_title}>({w_kr})</span>
           </div>
         </div>
       </div>
@@ -485,16 +578,36 @@ for target_date_str in common_dates:
   </div>
 
   <script>
-    function handleDateChange(val) {{
-      if(!val) return;
-      const latest = "{latest_date_dashed}";
-      if(val > latest) {{
-        alert("오늘 실시간 수급현황 및 SMP는 상단의 [KPX 실시간 바로가기] 버튼을 통해 확인하실 수 있습니다.\\n\\n일일 종합 분석 리포트는 24시간 마감 후 익일 아침 발행됩니다. 확정 최신일(" + latest + ")로 이동합니다.");
-        window.location.href = "daily_report_{latest_date_str}.html";
-        return;
+    const holidaysList = {json_holidays_js};
+
+    // 주말 및 대한민국 공휴일 달력 빨간색 렌더링
+    flatpickr("#historyDate", {{
+      locale: "ko",
+      dateFormat: "Y-m-d",
+      defaultDate: "{target_date_dashed}",
+      minDate: "2022-01-01",
+      maxDate: "{latest_date_dashed}",
+      onDayCreate: function(dObj, dStr, fp, dayElem) {{
+        const dateStr = flatpickr.formatDate(dayElem.dateObj, "Y-m-d");
+        const dayOfWeek = dayElem.dateObj.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {{
+          dayElem.classList.add("weekend-day");
+        }}
+        if (holidaysList.includes(dateStr)) {{
+          dayElem.classList.add("holiday-day");
+        }}
+      }},
+      onChange: function(selectedDates, dateStr) {{
+        if (!dateStr) return;
+        const latest = "{latest_date_dashed}";
+        if (dateStr > latest) {{
+          alert("오늘 실시간 수급현황 및 SMP는 상단의 [KPX 실시간 바로가기] 버튼을 통해 확인하실 수 있습니다.\\n\\n일일 종합 분석 리포트는 24시간 마감 후 익일 아침 발행됩니다. 확정 최신일(" + latest + ")로 이동합니다.");
+          window.location.href = "daily_report_{latest_date_str}.html";
+          return;
+        }}
+        window.location.href = "daily_report_" + dateStr.replace(/-/g, '') + ".html";
       }}
-      window.location.href = "daily_report_" + val.replace(/-/g, '') + ".html";
-    }}
+    }});
 
     Chart.register(window['chartjs-plugin-annotation']);
     Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {{
