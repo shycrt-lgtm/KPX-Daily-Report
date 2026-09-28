@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-print(">> 과거 실적 데이터 파일 로딩 시작...")
+print(">> 데이터 파일 로딩 시작...")
 
 def read_flexible_csv(file_path):
     for enc in ['cp949', 'utf-8-sig', 'euc-kr', 'utf-8']:
@@ -63,7 +63,7 @@ for _, row in df_cap.iterrows():
     }
 print(f"수급실적 로딩 완료: {len(cap_dict)}일")
 
-# 3. 수요예측 로딩
+# 3. 수요예측 로딩 (pssInland_YYYY.xlsx)
 pred_dict = {}
 pred_files = sorted(glob.glob("pssInland_*.xlsx"))
 for pf in pred_files:
@@ -82,12 +82,11 @@ for pf in pred_files:
             continue
 print(f"수요예측 로딩 완료: {len(pred_dict)}일")
 
-# 4. LNG 단가 로딩 정밀화 (입방당 시트 '합계' 행 및 전월비 지원)
+# 4. LNG 단가 로딩 정밀화 (입방당 시트 '합계' 행)
 lng_dict = {}
 lng_files = glob.glob("*LNG 단가*.xlsx")
 if lng_files:
     df_lng = pd.read_excel(lng_files[0], sheet_name="입방당", header=None)
-    # 컬럼 헤더(1~12월) 위치 탐색
     month_col_indices = {}
     header_row_idx = -1
     for r_idx in range(min(5, len(df_lng))):
@@ -104,11 +103,8 @@ if lng_files:
     for r_idx in range(header_row_idx + 1, len(df_lng)):
         col0 = str(df_lng.iloc[r_idx, 0]).strip()
         col1 = str(df_lng.iloc[r_idx, 1]).strip()
-        
-        # 연도 확인 (4자리 숫자)
         if col0.replace('.0', '').isdigit() and len(col0.replace('.0', '')) == 4:
             curr_year = int(col0.replace('.0', ''))
-            
         if "합계" in col1 and curr_year:
             for m in range(1, 13):
                 if m in month_col_indices:
@@ -121,7 +117,7 @@ if lng_files:
                         pass
 print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 데이터 확보")
 
-# 5. 발전원별 발전량 로딩 및 집계
+# 5. 발전원별 발전량 연도별 로딩 및 집계
 gen_dict = {}
 gen_files = sorted(glob.glob("*발전원별 발전량_*.xlsx"))
 for gf in gen_files:
@@ -185,23 +181,27 @@ for gf in gen_files:
 print(f"발전원 집계 완료: {len(gen_dict)}일")
 
 common_dates = sorted(list(set(smp_dict.keys()) & set(gen_dict.keys()) & set(cap_dict.keys())))
-print(f">> 최종 생성 대상 일수: {len(common_dates)}일")
+latest_date_str = common_dates[-1]
+latest_dt = datetime.strptime(latest_date_str, "%Y%m%d")
+latest_date_dashed = latest_dt.strftime("%Y-%m-%d")
+print(f">> 최종 생성 대상 일수: {len(common_dates)}일 (최신일자: {latest_date_str})")
 
 hours = [f"{i}시" for i in range(1, 25)]
 json_hours = json.dumps(hours)
+weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 
 for target_date_str in common_dates:
     dt = datetime.strptime(target_date_str, "%Y%m%d")
-    display_date = dt.strftime("%Y년 %m월 %d일")
+    w_kr = weekday_kr_list[dt.weekday()]
+    display_date = f"{dt.strftime('%Y년 %m월 %d일')}({w_kr})"
     target_date_dashed = dt.strftime("%Y-%m-%d")
     
-    # 당월 및 전월 문자열 (YYYYMM)
+    # LNG 단가 및 전월비 변동
     ym_str = target_date_str[:6]
     first_of_month = dt.replace(day=1)
     prev_month_dt = first_of_month - timedelta(days=1)
     prev_ym_str = prev_month_dt.strftime("%Y%m")
     
-    # LNG 단가 및 전월비 변동 계산
     lng_price = lng_dict.get(ym_str, 0.0)
     prev_lng_price = lng_dict.get(prev_ym_str, 0.0)
     
@@ -243,9 +243,8 @@ for target_date_str in common_dates:
         prev_d = (dt - timedelta(days=delta)).strftime("%Y%m%d")
         if prev_d in smp_dict and prev_d in cap_dict:
             p_dt = datetime.strptime(prev_d, "%Y%m%d")
-            weekday_kr = ["월", "화", "수", "목", "금", "토", "일"][p_dt.weekday()]
             recent_7.append({
-                'date': f"{p_dt.month}.{p_dt.day}({weekday_kr})",
+                'date': f"{p_dt.month}.{p_dt.day}({weekday_kr_list[p_dt.weekday()]})",
                 'avg': smp_dict[prev_d]['avg'],
                 'max': smp_dict[prev_d]['max'],
                 'min': smp_dict[prev_d]['min'],
@@ -281,6 +280,14 @@ for target_date_str in common_dates:
     """
     ai_gen_summary = f"주간 태양광 발전량 증가로 순부하 최저점을 형성하였으며, 일몰 후 저녁 피크 램핑 수요를 LNG 및 양수/ESS가 안정적으로 전담함."
 
+    is_latest = (target_date_str == latest_date_str)
+    latest_button_html = "" if is_latest else f"""
+      <a href="daily_report_{latest_date_str}.html" 
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] text-white hover:bg-slate-800 text-xs font-bold rounded shadow transition">
+        <span>최신 실적으로 이동</span> &rarr;
+      </a>
+    """
+
     html_content = f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -309,13 +316,17 @@ for target_date_str in common_dates:
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
-        <p class="text-sm text-slate-500 mt-1">기준일: {display_date} | 육지 기준 종합 실적</p>
+        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">{display_date}</strong> | 육지 기준 종합 실적</p>
       </div>
-      <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg shadow-sm">
-        <label for="historyDate" class="text-sm font-bold text-slate-700">조회일자:</label>
-        <input type="date" id="historyDate" min="2022-01-01" max="2026-12-31" value="{target_date_dashed}" 
-               class="bg-transparent text-sm font-bold text-slate-900 outline-none cursor-pointer"
-               onchange="if(this.value) window.location.href='daily_report_' + this.value.replace(/-/g, '') + '.html';">
+      <div class="flex flex-wrap items-center gap-2">
+        {latest_button_html}
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+          <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700">조회일자:</label>
+          <input type="date" id="historyDate" min="2022-01-01" max="{latest_date_dashed}" value="{target_date_dashed}" 
+                 class="bg-transparent text-xs md:text-sm font-bold text-slate-900 outline-none cursor-pointer"
+                 onchange="handleDateChange(this.value)">
+          <span class="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">({w_kr})</span>
+        </div>
       </div>
     </div>
 
@@ -434,6 +445,17 @@ for target_date_str in common_dates:
   </div>
 
   <script>
+    function handleDateChange(val) {{
+      if(!val) return;
+      const latest = "{latest_date_dashed}";
+      if(val > latest) {{
+        alert("해당 일자의 전력시장 실적은 24시간 마감 후 익일 집계됩니다.\\n현재 확정된 최신 실적일(" + latest + ")로 이동합니다.");
+        window.location.href = "daily_report_{latest_date_str}.html";
+        return;
+      }}
+      window.location.href = "daily_report_" + val.replace(/-/g, '') + ".html";
+    }}
+
     Chart.register(window['chartjs-plugin-annotation']);
     Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {{
       return eventPosition ? {{ x: eventPosition.x, y: eventPosition.y }} : false;
