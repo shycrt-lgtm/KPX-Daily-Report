@@ -91,41 +91,38 @@ for pf in sorted(glob.glob("pssInland_*.xlsx")):
                 pred_dict[d_val] = vals[:24]
 print(f"수요예측 로딩 완료: {len(pred_dict)}일")
 
-# 4. LNG 단가 로딩 정밀화 (전체 형태소 스캔 방식으로 병합 셀 무력화)
+# 4. LNG 단가 로딩 정밀화 (병합 해제된 정규화 엑셀용)
 lng_dict = {}
 lng_candidates = glob.glob("*LNG*.xlsx") + [f for f in glob.glob("*.xlsx") if "5." in f]
 if lng_candidates:
     lng_file = lng_candidates[0]
-    df_lng = pd.read_excel(lng_file, sheet_name="입방당", header=None)
+    print(f"LNG 단가 파일 로딩 중: {lng_file}")
     
-    month_cols = {}
-    for r in range(min(15, len(df_lng))):
-        row_vals = [str(x).replace('.0','').replace('월','').strip() for x in df_lng.iloc[r]]
-        found = {m: row_vals.index(str(m)) for m in range(1, 13) if str(m) in row_vals}
-        if len(found) >= 10:
-            month_cols = found
-            break
-            
-    current_year = None
-    for r in range(len(df_lng)):
-        row_strs = [str(x).replace(' ', '') for x in df_lng.iloc[r]]
+    # 엑셀 로딩 (첫 번째 줄을 컬럼 헤더로 사용)
+    df_lng = pd.read_excel(lng_file, sheet_name="입방당")
+    
+    for r_idx, row in df_lng.iterrows():
+        # A열(연도)과 B열(구분) 데이터 추출
+        col0_raw = str(row.iloc[0]).replace('.0', '').strip()
+        col1_raw = str(row.iloc[1]).replace(' ', '')
         
-        for cell in row_strs:
-            c_clean = cell.replace('.0', '')
-            if c_clean.isdigit() and len(c_clean) == 4 and int(c_clean) >= 2000:
-                current_year = int(c_clean)
-                break
-                
-        if any("합계" in c for c in row_strs) and current_year:
-            for m, c_idx in month_cols.items():
-                val = df_lng.iloc[r, c_idx]
-                try:
-                    v = float(str(val).replace(',', '').strip())
-                    if v > 0:
-                        lng_dict[f"{current_year}{m:02d}"] = v
-                except:
-                    pass
-print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 확보")
+        # A열이 4자리 연도이고, B열에 '합계'가 포함된 행만 핀셋 추출
+        if col0_raw.isdigit() and len(col0_raw) == 4 and "합계" in col1_raw:
+            current_year = int(col0_raw)
+            
+            # 1월(C열, 인덱스2)부터 12월(N열, 인덱스13)까지 반복
+            for m in range(1, 13):
+                col_idx = m + 1
+                if col_idx < len(row):
+                    val = row.iloc[col_idx]
+                    try:
+                        val_num = float(str(val).replace(',', '').strip())
+                        if val_num > 0:
+                            lng_dict[f"{current_year}{m:02d}"] = val_num
+                    except:
+                        pass
+
+print(f"LNG 단가 로딩 완료: 총 {len(lng_dict)}개월 데이터 확보 -> {lng_dict}")
 
 # 5. 발전원별 발전량 연도별 로딩 및 집계
 gen_dict = {}
