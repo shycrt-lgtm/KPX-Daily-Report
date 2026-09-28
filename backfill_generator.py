@@ -38,7 +38,7 @@ for _, row in df_smp.iterrows():
     }
 print(f"SMP 로딩 완료: {len(smp_dict)}일")
 
-# 1-1. 월별 가중평균 SMP 사전 계산 (전월 평균 SMP 산출용)
+# 1-1. 월별 가중평균 SMP 계산 (전월 평균 SMP 산출용)
 monthly_smp_dict = {}
 smp_months = set(k[:6] for k in smp_dict.keys())
 for ym in smp_months:
@@ -72,14 +72,15 @@ for _, row in df_cap.iterrows():
     }
 print(f"수급실적 로딩 완료: {len(cap_dict)}일")
 
-# 3. 수요예측 로딩 (pssInland_YYYY.xlsx - Timestamp 대응)
+# 3. 수요예측 로딩 (날짜 객체 및 텍스트 날짜 완벽 대응)
 pred_dict = {}
 for pf in sorted(glob.glob("pssInland_*.xlsx")):
     df_p = pd.read_excel(pf, header=None)
     for r in range(len(df_p)):
         row = df_p.iloc[r]
         raw_date = row.iloc[0]
-        if pd.isna(raw_date): continue
+        if pd.isna(raw_date):
+            continue
         
         d_val = ""
         if isinstance(raw_date, datetime):
@@ -211,7 +212,7 @@ hours = [f"{i}시" for i in range(1, 25)]
 json_hours = json.dumps(hours)
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 
-# 변동 표기 헬퍼 함수 (상승은 +, 하락은 ▼)
+# 변동 표기 헬퍼 함수 (상승: +, 하락: ▼)
 def format_diff(val):
     if val > 0:
         return f"+{abs(val):.2f}원", "text-rose-600"
@@ -283,6 +284,7 @@ for target_date_str in common_dates:
     peak_hour_str = c_info['time']
     reserve_ratio = c_info['res']
     
+    # 최근 7일 실적 및 전일비 계산
     recent_7 = []
     for delta in range(7):
         prev_d = (dt - timedelta(days=delta)).strftime("%Y%m%d")
