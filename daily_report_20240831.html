@@ -26,13 +26,22 @@
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
-        <p class="text-sm text-slate-500 mt-1">기준일: 2024년 08월 31일 | 육지 기준 종합 실적</p>
+        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">2024년 08월 31일(토)</strong> | 육지 기준 종합 실적</p>
       </div>
-      <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg shadow-sm">
-        <label for="historyDate" class="text-sm font-bold text-slate-700">조회일자:</label>
-        <input type="date" id="historyDate" min="2022-01-01" max="2026-12-31" value="2024-08-31" 
-               class="bg-transparent text-sm font-bold text-slate-900 outline-none cursor-pointer"
-               onchange="if(this.value) window.location.href='daily_report_' + this.value.replace(/-/g, '') + '.html';">
+      <div class="flex flex-wrap items-center gap-2">
+        
+      <a href="daily_report_20260927.html" 
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] text-white hover:bg-slate-800 text-xs font-bold rounded shadow transition">
+        <span>최신 실적으로 이동</span> &rarr;
+      </a>
+    
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+          <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700">조회일자:</label>
+          <input type="date" id="historyDate" min="2022-01-01" max="2026-09-27" value="2024-08-31" 
+                 class="bg-transparent text-xs md:text-sm font-bold text-slate-900 outline-none cursor-pointer"
+                 onchange="handleDateChange(this.value)">
+          <span class="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">(토)</span>
+        </div>
       </div>
     </div>
 
@@ -42,7 +51,7 @@
         
     <ul>
       <li><strong>수급 및 가격 지표:</strong> 최대전력수요 76,281MW(20:00) 및 최고 SMP 184.68원/kWh가 14~14시 피크 구간에 관찰됨.</li>
-      <li><strong>시장 동향:</strong> 가중평균 SMP는 140.00원/kWh(전일비 +1.1원)이며, 공급예비율 28.2% 수준임.</li>
+      <li><strong>시장 동향:</strong> 가중평균 SMP는 140.00원/kWh(전일비 +1.1원)이며, 당월 적용 LNG 단가는 0.0원/Nm³(-), 공급예비율 28.2% 수준임.</li>
       <li><strong>발전원 구성:</strong> 기저발전(원자력·석탄) 중심 위에 주간 태양광 출력 정점 및 저녁 피크 LNG 램핑 대응 패턴이 확인됨.</li>
     </ul>
     
@@ -55,9 +64,9 @@
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-slate-50">
           <p class="text-xs font-bold text-slate-500 mb-1">LNG 단가 (당월)</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-700">0.0</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
+            <span class="text-2xl font-black text-slate-800">0.0</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 text-slate-400 tracking-tighter">입방당 합계</p>
+          <p class="text-[11px] font-semibold mt-1 text-slate-400">-</p>
         </div>
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">가중평균 SMP</p>
@@ -199,6 +208,17 @@
   </div>
 
   <script>
+    function handleDateChange(val) {
+      if(!val) return;
+      const latest = "2026-09-27";
+      if(val > latest) {
+        alert("해당 일자의 전력시장 실적은 24시간 마감 후 익일 집계됩니다.\n현재 확정된 최신 실적일(" + latest + ")로 이동합니다.");
+        window.location.href = "daily_report_20260927.html";
+        return;
+      }
+      window.location.href = "daily_report_" + val.replace(/-/g, '') + ".html";
+    }
+
     Chart.register(window['chartjs-plugin-annotation']);
     Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {
       return eventPosition ? { x: eventPosition.x, y: eventPosition.y } : false;
@@ -263,9 +283,9 @@
             annotations: {
               peakBox: dynamicPeakAnnotation,
               maxPt: { type: 'point', xValue: 13, yValue: 184.68, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' },
-              maxLbl: { type: 'label', xValue: 13, yValue: 184.68, content: ['최고 184.68원'], font: { size: 11, weight: 'bold' }, color: '#d93f3c', yAdjust: -15 },
+              maxLbl: { type: 'label', xValue: 13, yValue: 184.68, content: ['최고 ' + Number(184.68).toFixed(2) + '원'], font: { size: 11, weight: 'bold' }, color: '#d93f3c', yAdjust: -15 },
               minPt: { type: 'point', xValue: 2, yValue: 107.42, backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' },
-              minLbl: { type: 'label', xValue: 2, yValue: 107.42, content: ['최저 107.42원'], font: { size: 11, weight: 'bold' }, color: '#005587', yAdjust: 15 }
+              minLbl: { type: 'label', xValue: 2, yValue: 107.42, content: ['최저 ' + Number(107.42).toFixed(2) + '원'], font: { size: 11, weight: 'bold' }, color: '#005587', yAdjust: 15 }
             }
           }
         }
