@@ -82,40 +82,51 @@ for pf in pred_files:
             continue
 print(f"수요예측 로딩 완료: {len(pred_dict)}일")
 
-# 4. LNG 단가 로딩 정밀화 (입방당 시트 '합계' 행)
+# 4. LNG 단가 로딩 정밀화 (입방당 시트의 연도-합계 행 매핑)
 lng_dict = {}
-lng_files = glob.glob("*LNG 단가*.xlsx")
-if lng_files:
-    df_lng = pd.read_excel(lng_files[0], sheet_name="입방당", header=None)
-    month_col_indices = {}
+lng_candidates = glob.glob("*LNG*.xlsx") + [f for f in glob.glob("*.xlsx") if "5." in f]
+if lng_candidates:
+    lng_file = lng_candidates[0]
+    print(f"LNG 단가 파일 로딩 중: {lng_file}")
+    df_lng = pd.read_excel(lng_file, sheet_name="입방당", header=None)
+    
+    # 1) 헤더 행(1~12월 열 위치) 찾기
+    month_col_map = {}
     header_row_idx = -1
-    for r_idx in range(min(5, len(df_lng))):
-        row_vals = [str(x).strip() for x in df_lng.iloc[r_idx]]
+    for r in range(min(10, len(df_lng))):
+        row_vals = [str(x).strip().replace('월', '').replace('.0', '') for x in df_lng.iloc[r]]
+        found = {}
         for m in range(1, 13):
-            for c_idx, val in enumerate(row_vals):
-                if val in [str(m), f"{m}월"]:
-                    month_col_indices[m] = c_idx
-        if len(month_col_indices) >= 10:
-            header_row_idx = r_idx
+            if str(m) in row_vals:
+                found[m] = row_vals.index(str(m))
+        if len(found) >= 10:
+            month_col_map = found
+            header_row_idx = r
             break
+            
+    # 2) 연도 병합 셀 및 합계 행 값 추출
+    current_year = None
+    for r in range(header_row_idx + 1, len(df_lng)):
+        col0_raw = str(df_lng.iloc[r, 0]).strip().replace('.0', '')
+        col1_raw = str(df_lng.iloc[r, 1]).strip()
+        
+        # 4자리 숫자 연도 감지
+        if col0_raw.isdigit() and len(col0_raw) == 4:
+            current_year = int(col0_raw)
+            
+        if "합계" in col1_raw and current_year:
+            for m, col_idx in month_col_map.items():
+                val = df_lng.iloc[r, col_idx]
+                try:
+                    val_str = str(val).replace(',', '').strip()
+                    if val_str and val_str not in ['-', 'nan', 'None']:
+                        val_num = float(val_str)
+                        if val_num > 0:
+                            lng_dict[f"{current_year}{m:02d}"] = val_num
+                except:
+                    pass
 
-    curr_year = None
-    for r_idx in range(header_row_idx + 1, len(df_lng)):
-        col0 = str(df_lng.iloc[r_idx, 0]).strip()
-        col1 = str(df_lng.iloc[r_idx, 1]).strip()
-        if col0.replace('.0', '').isdigit() and len(col0.replace('.0', '')) == 4:
-            curr_year = int(col0.replace('.0', ''))
-        if "합계" in col1 and curr_year:
-            for m in range(1, 13):
-                if m in month_col_indices:
-                    val = df_lng.iloc[r_idx, month_col_indices[m]]
-                    try:
-                        val_str = str(val).replace(',', '').strip()
-                        if val_str and val_str not in ['-', 'nan', 'None']:
-                            lng_dict[f"{curr_year}{m:02d}"] = float(val_str)
-                    except:
-                        pass
-print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 데이터 확보")
+print(f"LNG 단가 로딩 완료: 총 {len(lng_dict)}개월 데이터 확보 -> {lng_dict}")
 
 # 5. 발전원별 발전량 연도별 로딩 및 집계
 gen_dict = {}
@@ -196,7 +207,7 @@ for target_date_str in common_dates:
     display_date = f"{dt.strftime('%Y년 %m월 %d일')}({w_kr})"
     target_date_dashed = dt.strftime("%Y-%m-%d")
     
-    # LNG 단가 및 전월비 변동
+    # LNG 단가 및 전월비 변동 계산
     ym_str = target_date_str[:6]
     first_of_month = dt.replace(day=1)
     prev_month_dt = first_of_month - timedelta(days=1)
@@ -207,7 +218,7 @@ for target_date_str in common_dates:
     
     if lng_price > 0 and prev_lng_price > 0:
         diff_lng = round(lng_price - prev_lng_price, 2)
-        diff_lng_color = "text-rose-600" if diff_lng > 0 else "text-blue-600"
+        diff_lng_color = "text-rose-600" if diff_lng > 0 else ("text-blue-600" if diff_lng < 0 else "text-slate-600")
         diff_lng_text = f"전월비 {diff_lng:+}원"
     else:
         diff_lng_color = "text-slate-400"
@@ -283,8 +294,8 @@ for target_date_str in common_dates:
     is_latest = (target_date_str == latest_date_str)
     latest_button_html = "" if is_latest else f"""
       <a href="daily_report_{latest_date_str}.html" 
-         class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] text-white hover:bg-slate-800 text-xs font-bold rounded shadow transition">
-        <span>최신 실적으로 이동</span> &rarr;
+         class="inline-flex items-center gap-1 px-3 py-1.5 bg-[#001f3f] text-white hover:bg-slate-800 text-xs font-bold rounded shadow transition">
+        <span>최신 실적({latest_dt.strftime('%m.%d')})으로</span> &rarr;
       </a>
     """
 
@@ -318,14 +329,31 @@ for target_date_str in common_dates:
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
         <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">{display_date}</strong> | 육지 기준 종합 실적</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        {latest_button_html}
-        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-          <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700">조회일자:</label>
-          <input type="date" id="historyDate" min="2022-01-01" max="{latest_date_dashed}" value="{target_date_dashed}" 
-                 class="bg-transparent text-xs md:text-sm font-bold text-slate-900 outline-none cursor-pointer"
-                 onchange="handleDateChange(this.value)">
-          <span class="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">({w_kr})</span>
+
+      <div class="flex flex-col md:items-end gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
+          <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" rel="noopener noreferrer"
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition">
+            <span>⚡ 실시간 수급현황</span>
+            <svg class="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+          </a>
+          <a href="https://new.kpx.or.kr/smpInland.es?mid=a10404080100&device=pc" target="_blank" rel="noopener noreferrer"
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition">
+            <span>📈 실시간 SMP</span>
+            <svg class="w-3 h-3 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+          </a>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          {latest_button_html}
+          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+            <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700">조회일자:</label>
+            <input type="date" id="historyDate" min="2022-01-01" max="{latest_date_dashed}" value="{target_date_dashed}" 
+                   class="bg-transparent text-xs md:text-sm font-bold text-slate-900 outline-none cursor-pointer"
+                   onchange="handleDateChange(this.value)">
+            <span class="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">({w_kr})</span>
+          </div>
         </div>
       </div>
     </div>
@@ -343,7 +371,7 @@ for target_date_str in common_dates:
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-slate-50">
           <p class="text-xs font-bold text-slate-500 mb-1">LNG 단가 (당월)</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-800">{lng_price:,.1f}</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
+            <span class="text-2xl font-black text-slate-800">{lng_price:,.2f}</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
           </div>
           <p class="text-[11px] font-semibold mt-1 {diff_lng_color}">{diff_lng_text}</p>
         </div>
@@ -449,7 +477,7 @@ for target_date_str in common_dates:
       if(!val) return;
       const latest = "{latest_date_dashed}";
       if(val > latest) {{
-        alert("해당 일자의 전력시장 실적은 24시간 마감 후 익일 집계됩니다.\\n현재 확정된 최신 실적일(" + latest + ")로 이동합니다.");
+        alert("오늘 실시간 수급현황 및 SMP는 상단의 [KPX 실시간 바로가기] 버튼을 통해 확인하실 수 있습니다.\\n\\n일일 종합 분석 리포트는 24시간 마감 후 익일 아침 발행됩니다. 확정 최신일(" + latest + ")로 이동합니다.");
         window.location.href = "daily_report_{latest_date_str}.html";
         return;
       }}
