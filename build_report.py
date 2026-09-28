@@ -19,11 +19,11 @@ genai.configure(api_key=GEMINI_KEY)
 target_dt = datetime.now() - timedelta(days=1)
 target_date_str = target_dt.strftime("%Y%m%d")
 display_date = target_dt.strftime("%Y년 %m월 %d일")
-target_date_dashed = target_dt.strftime("%Y-%m-%d")  # 달력 UI용 포맷
+target_date_dashed = target_dt.strftime("%Y-%m-%d")
 hours = [f"{i}시" for i in range(1, 25)]
 
 # =====================================================================
-# 2. 데이터 셋 세팅 (KOGAS LNG 단가 및 수급/SMP 실적)
+# 2. 데이터 세팅 및 피크 밴드 동적 계산
 # =====================================================================
 lng_heat_price_gcal = 105430 
 lng_unit_price = round((lng_heat_price_gcal / 1000000) * 10190, 1)
@@ -47,8 +47,28 @@ gen_wind = [380, 350, 320, 310, 300, 310, 320, 350, 380, 390, 400, 380, 360, 350
 gen_solar = [0, 0, 0, 0, 0, 800, 2500, 5500, 8500, 10500, 11500, 11000, 9500, 7500, 5000, 2500, 500, 0, 0, 0, 0, 0, 0, 0]
 
 gen_vre = [s + w for s, w in zip(gen_solar, gen_wind)]
-net_load = [a - v for a, v in zip(actual_demand, gen_vre)]
 spread_flex = [p_g + p_l + e_d + e_c for p_g, p_l, e_d, e_c in zip(gen_pumped_gen, gen_pumped_load, gen_ess_dis, gen_ess_chg)]
+
+net_load = [gen_nuclear[i] + gen_coal[i] + gen_oil[i] + gen_gas[i] + gen_hydro[i] + gen_pumped_gen[i] + gen_ess_dis[i] for i in range(24)]
+
+# --- SMP 지표 및 피크 밴드 동적 계산 ---
+avg_smp = round(sum(land_smp) / len(land_smp), 2)
+max_smp = max(land_smp)
+min_smp = min(land_smp)
+max_smp_idx = land_smp.index(max_smp)
+min_smp_idx = land_smp.index(min_smp)
+
+# 최고 SMP의 90% 이상을 유지하는 시간대를 탐색하여 피크 구간 정의
+smp_threshold = min_smp + (max_smp - min_smp) * 0.85
+high_smp_indices = [i for i, v in enumerate(land_smp) if v >= smp_threshold]
+if high_smp_indices:
+    peak_band_start = min(high_smp_indices)
+    peak_band_end = max(high_smp_indices)
+else:
+    peak_band_start = max_smp_idx
+    peak_band_end = max_smp_idx
+
+peak_band_label = f"{peak_band_start + 1}~{peak_band_end + 1}시 피크"
 
 recent_7days = [
     {"date": "9.16(수)", "avg": 102.81, "max": 115.44, "min": 93.77, "cap": 101398, "peak": 75206, "time": "19시", "res": 34.8},
@@ -60,10 +80,6 @@ recent_7days = [
     {"date": "9.22(화)", "avg": 126.08, "max": 183.83, "min": 97.45, "cap": 98874, "peak": 76817, "time": "19시", "res": 28.7}
 ]
 reversed_7days = list(reversed(recent_7days))
-
-avg_smp = round(sum(land_smp) / len(land_smp), 2)
-max_smp = max(land_smp)
-min_smp = min(land_smp)
 
 max_peak_actual = max(actual_demand)
 peak_hour_str = hours[actual_demand.index(max_peak_actual)]
@@ -83,7 +99,8 @@ prompt_main = f"""
 - 기준일: {display_date}
 - 최고 SMP: {max_smp} 원/kWh (최저 {min_smp} 원/kWh)
 - 최대부하: {max_peak_actual:,} MW ({peak_hour_str})
-- 특이사항: 전일 대비 가중평균 SMP {diff_avg_smp:+}원 변동. 최고 SMP 및 최대부하가 17~21시 구간에 동시 관찰됨.
+- SMP 주요 피크 밴드: {peak_band_label}
+- 특이사항: 전일 대비 가중평균 SMP {diff_avg_smp:+}원 변동.
 
 [작성 가이드]
 1. 팩트(Fact) 기반으로 객관적 현상을 우선 서술하며, 단 하루 실적만으로 구조적 변화를 과도하게 단정짓지 말 것.
@@ -105,14 +122,14 @@ try:
 except Exception:
     ai_summary = f"""
     <ul>
-      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 {max_peak_actual:,}MW({peak_hour_str}) 및 최고 SMP {max_smp}원/kWh가 저녁 17~21시 구간에 집중적으로 관찰됨.</li>
-      <li><strong>팩트 및 특이동향:</strong> 전일 대비 가중평균 SMP가 {diff_avg_smp:+}원 변동하였으며, 주간 신재생 유입에 따른 순부하 하락 패턴이 지속 관찰되고 있음.</li>
+      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 {max_peak_actual:,}MW({peak_hour_str}) 및 최고 SMP {max_smp}원/kWh가 {peak_band_label} 구간에 집중 관찰됨.</li>
+      <li><strong>팩트 및 특이동향:</strong> 전일 대비 가중평균 SMP가 {diff_avg_smp:+}원 변동하였으며, 주간 신재생 유입에 따른 순부하 하락 패턴이 안정적으로 유지됨.</li>
     </ul>
     """
-    ai_gen_summary = "주간 신재생 발전량 증가로 낮 시간대 순부하(Net Load)가 하락하였으며, 일몰 후 감소분을 가스(LNG) 및 양수/ESS 발전이 적기 대체함."
+    ai_gen_summary = "주간 신재생 발전량 증가로 낮 시간대 순부하(Net Load)가 하락하였으며, 일몰 후 감소분을 LNG 및 양수/ESS 발전이 적기 대체함."
 
 # =====================================================================
-# 4. HTML 테이블 사전 생성
+# 4. HTML 테이블 및 JSON 변수화
 # =====================================================================
 table_rows_html = ""
 for i, row in enumerate(reversed_7days):
@@ -171,7 +188,7 @@ html_template = f"""<!DOCTYPE html>
   <style>
     body {{ font-family: 'Noto Sans KR', sans-serif; background-color: #ffffff; color: #1a1a1a; }}
     .mckinsey-border {{ border-top: 4px solid #001f3f; }}
-    .chart-container {{ position: relative; height: 350px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }}
+    .chart-container {{ position: relative; height: 450px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }}
     table th, table td {{ border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }}
     table th {{ background-color: #f8fafc; font-weight: 700; color: #334155; }}
     .text-holiday {{ color: #dc2626; font-weight: 700; }}
@@ -182,7 +199,7 @@ html_template = f"""<!DOCTYPE html>
 <body class="p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-8">
 
-    <!-- Header (Datepicker 추가) -->
+    <!-- Header -->
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
@@ -190,7 +207,7 @@ html_template = f"""<!DOCTYPE html>
       </div>
       <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg shadow-sm">
         <label for="historyDate" class="text-sm font-bold text-slate-700">조회일자:</label>
-        <input type="date" id="historyDate" min="2025-01-01" max="{target_date_dashed}" value="{target_date_dashed}" 
+        <input type="date" id="historyDate" min="2022-01-01" max="{target_date_dashed}" value="{target_date_dashed}" 
                class="bg-transparent text-sm font-bold text-slate-900 outline-none cursor-pointer"
                onchange="if(this.value) window.location.href='daily_report_' + this.value.replace(/-/g, '') + '.html';">
       </div>
@@ -311,20 +328,31 @@ html_template = f"""<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- 6. 양수·ESS 스프레드 -->
+    <!-- 6. SMP 스프레드 -->
     <div>
-      <h2>06. SMP 스프레드 (유연성 자원 분리)</h2>
+      <h2>06. SMP 스프레드</h2>
       <div class="chart-container">
         <canvas id="spreadChart"></canvas>
       </div>
       <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
     </div>
 
-    <!-- 7. 수요예측 대비 실적 -->
+    <!-- 7. 수요예측 대비 실적 (상단 Line / 하단 Bar 2단 구조) -->
     <div>
       <h2>07. 하루전 수요예측 vs 전력시장 수요 실적</h2>
-      <div class="chart-container">
-        <canvas id="demandDiffChart"></canvas>
+      <div class="border border-slate-200 p-4 bg-white space-y-4">
+        <div>
+          <span class="text-xs font-bold text-slate-500 block mb-1">■ 전력수요 추이 (단위: MW)</span>
+          <div class="relative h-[280px] w-full">
+            <canvas id="demandLineChart"></canvas>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-3">
+          <span class="text-xs font-bold text-slate-500 block mb-1">■ 실적 - 예측 오차 (단위: MW)</span>
+          <div class="relative h-[160px] w-full">
+            <canvas id="demandDiffBarChart"></canvas>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -396,61 +424,118 @@ html_template = f"""<!DOCTYPE html>
       }}
     }};
 
-    const peakBandAnnotation = {{
+    // [수정] 실제 계산된 피크 구간 기반 음영 박스
+    const dynamicPeakAnnotation = {{
       type: 'box',
-      xMin: 16, xMax: 20,
+      xMin: {peak_band_start}, xMax: {peak_band_end},
       backgroundColor: 'rgba(217, 63, 60, 0.08)',
       borderWidth: 0,
-      label: {{ display: true, content: '피크 구간 (17~21시)', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }}
+      label: {{ display: true, content: '{peak_band_label}', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }}
     }};
 
+    // [수정] 최고/최저 SMP 상시 표시 라벨 및 포인트
+    const maxSmpAnnotation = {{
+      type: 'point',
+      xValue: {max_smp_idx},
+      yValue: {max_smp},
+      backgroundColor: '#d93f3c',
+      radius: 5,
+      borderWidth: 2,
+      borderColor: '#ffffff'
+    }};
+    const maxSmpLabelAnnotation = {{
+      type: 'label',
+      xValue: {max_smp_idx},
+      yValue: {max_smp},
+      content: ['최고 {max_smp}원'],
+      font: {{ size: 11, weight: 'bold' }},
+      color: '#d93f3c',
+      yAdjust: -15
+    }};
+    const minSmpAnnotation = {{
+      type: 'point',
+      xValue: {min_smp_idx},
+      yValue: {min_smp},
+      backgroundColor: '#005587',
+      radius: 5,
+      borderWidth: 2,
+      borderColor: '#ffffff'
+    }};
+    const minSmpLabelAnnotation = {{
+      type: 'label',
+      xValue: {min_smp_idx},
+      yValue: {min_smp},
+      content: ['최저 {min_smp}원'],
+      font: {{ size: 11, weight: 'bold' }},
+      color: '#005587',
+      yAdjust: 15
+    }};
+
+    // 02. SMP 차트
     new Chart(document.getElementById('smpChart'), {{
       type: 'line',
       data: {{
         labels: labels,
         datasets: [{{
           label: '시간대별 SMP (원/kWh)', data: {json_land_smp}, pointStyle: 'line',
-          borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, tension: 0.1
+          borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1
         }}]
       }},
-      options: {{ ...commonOptions, plugins: {{ ...commonOptions.plugins, annotation: {{ annotations: {{ box1: peakBandAnnotation }} }} }} }}
+      options: {{
+        ...commonOptions,
+        plugins: {{
+          ...commonOptions.plugins,
+          annotation: {{
+            annotations: {{
+              peakBox: dynamicPeakAnnotation,
+              maxPt: maxSmpAnnotation,
+              maxLbl: maxSmpLabelAnnotation,
+              minPt: minSmpAnnotation,
+              minLbl: minSmpLabelAnnotation
+            }}
+          }}
+        }}
+      }}
     }});
 
+    // 04. 발전원별 누적 차트
     new Chart(document.getElementById('generationChart'), {{
       type: 'line',
       data: {{
         labels: labels,
         datasets: [
-          {{ type: 'line', label: '순부하 (태양광/풍력 제외)', data: {json_net_load}, pointStyle: 'line', borderColor: '#1a1a1a', borderDash: [4,4], borderWidth: 2, pointRadius: 0, fill: false, z: 10 }},
-          {{ label: '원자력', data: {json_gen_nuclear}, backgroundColor: '#f59e0b', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '석탄', data: {json_gen_coal}, backgroundColor: '#b45309', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '유류', data: {json_gen_oil}, backgroundColor: '#475569', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '가스(LNG)', data: {json_gen_gas}, backgroundColor: '#fde047', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '수력', data: {json_gen_hydro}, backgroundColor: '#38bdf8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '양수발전', data: {json_gen_pumped_gen}, backgroundColor: '#0284c7', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: 'ESS방전', data: {json_gen_ess_dis}, backgroundColor: '#1d4ed8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '풍력', data: {json_gen_wind}, backgroundColor: '#22c55e', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '태양광', data: {json_gen_solar}, backgroundColor: '#ef4444', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: '양수펌핑(충전)', data: {json_gen_pumped_load}, backgroundColor: '#94a3b8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }},
-          {{ label: 'ESS충전', data: {json_gen_ess_chg}, backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2 }}
+          {{ type: 'line', label: '순부하 (태양광/풍력 제외)', data: {json_net_load}, pointStyle: 'line', borderColor: '#1a1a1a', borderDash: [4,4], borderWidth: 2, pointRadius: 0, fill: false, z: 10, stack: 'netload_stack' }},
+          {{ label: '원자력', data: {json_gen_nuclear}, backgroundColor: '#f59e0b', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '석탄', data: {json_gen_coal}, backgroundColor: '#b45309', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '유류', data: {json_gen_oil}, backgroundColor: '#475569', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: 'LNG', data: {json_gen_gas}, backgroundColor: '#fde047', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '수력', data: {json_gen_hydro}, backgroundColor: '#38bdf8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '양수발전', data: {json_gen_pumped_gen}, backgroundColor: '#0284c7', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: 'ESS방전', data: {json_gen_ess_dis}, backgroundColor: '#1d4ed8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '풍력', data: {json_gen_wind}, backgroundColor: '#22c55e', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '태양광', data: {json_gen_solar}, backgroundColor: '#ef4444', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '양수펌핑(충전)', data: {json_gen_pumped_load}, backgroundColor: '#94a3b8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: 'ESS충전', data: {json_gen_ess_chg}, backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }}
         ]
       }},
       options: {{ ...commonOptions, scales: {{ x: {{ stacked: true, grid: {{ display: false }} }}, y: {{ stacked: true }} }} }}
     }});
 
+    // 05. 주요 발전원 차트
     new Chart(document.getElementById('sourceLineChart'), {{
       type: 'line',
       data: {{
         labels: labels,
         datasets: [
-          {{ label: '가스 (LNG)', data: {json_gen_gas}, pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }},
+          {{ label: 'LNG', data: {json_gen_gas}, pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }},
           {{ label: '석탄', data: {json_gen_coal}, pointStyle: 'line', borderColor: '#d93f3c', borderDash: [5,5], borderWidth: 2, pointRadius: 0, tension: 0.3 }},
           {{ label: '신재생(태양광)', data: {json_gen_solar}, pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2, pointRadius: 0, tension: 0.3 }}
         ]
       }},
-      options: {{ ...commonOptions, plugins: {{ ...commonOptions.plugins, annotation: {{ annotations: {{ box1: peakBandAnnotation }} }} }} }}
+      options: {{ ...commonOptions, plugins: {{ ...commonOptions.plugins, annotation: {{ annotations: {{ box1: dynamicPeakAnnotation }} }} }} }}
     }});
 
+    // 06. SMP 스프레드 차트
     new Chart(document.getElementById('spreadChart'), {{
       type: 'line',
       data: {{
@@ -470,22 +555,33 @@ html_template = f"""<!DOCTYPE html>
       }}
     }});
 
-    new Chart(document.getElementById('demandDiffChart'), {{
+    // 07-1. 수요예측 vs 실적 (상단 Line 차트)
+    new Chart(document.getElementById('demandLineChart'), {{
       type: 'line',
       data: {{
         labels: labels,
         datasets: [
-          {{ type: 'bar', label: '실적-예측 오차(MW)', yAxisID: 'y1', data: {json_demand_diff}, pointStyle: 'rect', backgroundColor: 'rgba(59, 130, 246, 0.4)' }},
-          {{ type: 'line', label: '하루전 수요예측', yAxisID: 'y', data: {json_forecast_demand}, pointStyle: 'line', borderColor: '#005587', borderDash: [5,5], borderWidth: 2, pointRadius: 0, tension: 0.3 }},
-          {{ type: 'line', label: '전력시장 수요실적', yAxisID: 'y', data: {json_actual_demand}, pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }}
+          {{ label: '하루전 수요예측', data: {json_forecast_demand}, pointStyle: 'line', borderColor: '#005587', borderDash: [5,5], borderWidth: 2, pointRadius: 0, tension: 0.3 }},
+          {{ label: '전력시장 수요실적', data: {json_actual_demand}, pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }}
+        ]
+      }},
+      options: {{ ...commonOptions }}
+    }});
+
+    // 07-2. 수요예측 오차 (하단 Bar 차트)
+    new Chart(document.getElementById('demandDiffBarChart'), {{
+      type: 'bar',
+      data: {{
+        labels: labels,
+        datasets: [
+          {{ label: '실적 - 예측 오차 (MW)', data: {json_demand_diff}, pointStyle: 'rect', backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: '#2563eb', borderWidth: 1 }}
         ]
       }},
       options: {{
         ...commonOptions,
         scales: {{
           x: {{ grid: {{ display: false }} }},
-          y: {{ type: 'linear', display: true, position: 'left' }},
-          y1: {{ type: 'linear', display: true, position: 'right', grid: {{ drawOnChartArea: false }}, min: 0, max: 10000 }}
+          y: {{ grid: {{ color: '#f1f5f9' }} }}
         }}
       }}
     }});
