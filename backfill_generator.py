@@ -15,7 +15,7 @@ def read_flexible_csv(file_path):
             continue
     raise ValueError(f"파일을 읽을 수 없습니다: {file_path}")
 
-# 1. 시간대별 SMP 로딩 (.csv 및 .xlsx 모두 대응)
+# 1. 시간대별 SMP 로딩
 smp_candidates = glob.glob("*SMP*.csv") + glob.glob("*SMP*.xlsx")
 if not smp_candidates:
     raise FileNotFoundError("SMP 파일을 찾을 수 없습니다.")
@@ -38,7 +38,7 @@ for _, row in df_smp.iterrows():
     }
 print(f"SMP 로딩 완료: {len(smp_dict)}일")
 
-# 2. 일별 최대부하 및 예비율 로딩 (.csv 및 .xlsx 모두 대응)
+# 2. 일별 최대부하 및 예비율 로딩
 cap_candidates = glob.glob("*최대부하*.csv") + glob.glob("*최대부하*.xlsx")
 if not cap_candidates:
     raise FileNotFoundError("최대부하 파일을 찾을 수 없습니다.")
@@ -63,7 +63,7 @@ for _, row in df_cap.iterrows():
     }
 print(f"수급실적 로딩 완료: {len(cap_dict)}일")
 
-# 3. 수요예측 로딩 (pssInland_YYYY.xlsx)
+# 3. 수요예측 로딩
 pred_dict = {}
 pred_files = sorted(glob.glob("pssInland_*.xlsx"))
 for pf in pred_files:
@@ -82,28 +82,46 @@ for pf in pred_files:
             continue
 print(f"수요예측 로딩 완료: {len(pred_dict)}일")
 
-# 4. LNG 단가 로딩
+# 4. LNG 단가 로딩 정밀화 (입방당 시트 '합계' 행 및 전월비 지원)
 lng_dict = {}
 lng_files = glob.glob("*LNG 단가*.xlsx")
 if lng_files:
-    df_lng = pd.read_excel(lng_files[0], sheet_name="입방당")
-    year_col = df_lng.columns[0]
-    type_col = df_lng.columns[1]
-    curr_year = None
-    for idx, row in df_lng.iterrows():
-        if pd.notna(row[year_col]):
-            try:
-                curr_year = int(row[year_col])
-            except:
-                pass
-        if str(row[type_col]).strip() == "합계" and curr_year:
-            for m in range(1, 13):
-                val = row.iloc[m + 1]
-                if pd.notna(val) and str(val).strip() not in ['-', '']:
-                    lng_dict[f"{curr_year}{m:02d}"] = float(str(val).replace(',', ''))
-print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월")
+    df_lng = pd.read_excel(lng_files[0], sheet_name="입방당", header=None)
+    # 컬럼 헤더(1~12월) 위치 탐색
+    month_col_indices = {}
+    header_row_idx = -1
+    for r_idx in range(min(5, len(df_lng))):
+        row_vals = [str(x).strip() for x in df_lng.iloc[r_idx]]
+        for m in range(1, 13):
+            for c_idx, val in enumerate(row_vals):
+                if val in [str(m), f"{m}월"]:
+                    month_col_indices[m] = c_idx
+        if len(month_col_indices) >= 10:
+            header_row_idx = r_idx
+            break
 
-# 5. 발전원별 발전량 연도별 로딩 및 집계
+    curr_year = None
+    for r_idx in range(header_row_idx + 1, len(df_lng)):
+        col0 = str(df_lng.iloc[r_idx, 0]).strip()
+        col1 = str(df_lng.iloc[r_idx, 1]).strip()
+        
+        # 연도 확인 (4자리 숫자)
+        if col0.replace('.0', '').isdigit() and len(col0.replace('.0', '')) == 4:
+            curr_year = int(col0.replace('.0', ''))
+            
+        if "합계" in col1 and curr_year:
+            for m in range(1, 13):
+                if m in month_col_indices:
+                    val = df_lng.iloc[r_idx, month_col_indices[m]]
+                    try:
+                        val_str = str(val).replace(',', '').strip()
+                        if val_str and val_str not in ['-', 'nan', 'None']:
+                            lng_dict[f"{curr_year}{m:02d}"] = float(val_str)
+                    except:
+                        pass
+print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 데이터 확보")
+
+# 5. 발전원별 발전량 로딩 및 집계
 gen_dict = {}
 gen_files = sorted(glob.glob("*발전원별 발전량_*.xlsx"))
 for gf in gen_files:
@@ -140,7 +158,6 @@ for gf in gen_files:
         ess_dis = [max(0.0, v) for v in ess]
         ess_chg = [min(0.0, v) for v in ess]
         
-        # 전력시장 수요실적 (BTM/PPA 제외 순수 급전 발전량 합)
         act_demand = [
             nuc[i] + coal[i] + oil[i] + gas[i] + hydro[i] + pump_gen[i] + ess_dis[i] + wind[i] + solar[i]
             for i in range(24)
@@ -177,8 +194,26 @@ for target_date_str in common_dates:
     dt = datetime.strptime(target_date_str, "%Y%m%d")
     display_date = dt.strftime("%Y년 %m월 %d일")
     target_date_dashed = dt.strftime("%Y-%m-%d")
-    ym_str = target_date_str[:6]
     
+    # 당월 및 전월 문자열 (YYYYMM)
+    ym_str = target_date_str[:6]
+    first_of_month = dt.replace(day=1)
+    prev_month_dt = first_of_month - timedelta(days=1)
+    prev_ym_str = prev_month_dt.strftime("%Y%m")
+    
+    # LNG 단가 및 전월비 변동 계산
+    lng_price = lng_dict.get(ym_str, 0.0)
+    prev_lng_price = lng_dict.get(prev_ym_str, 0.0)
+    
+    if lng_price > 0 and prev_lng_price > 0:
+        diff_lng = round(lng_price - prev_lng_price, 2)
+        diff_lng_color = "text-rose-600" if diff_lng > 0 else "text-blue-600"
+        diff_lng_text = f"전월비 {diff_lng:+}원"
+    else:
+        diff_lng_color = "text-slate-400"
+        diff_lng_text = "-"
+
+    # SMP 및 피크
     s_info = smp_dict[target_date_str]
     land_smp = s_info['hourly']
     avg_smp = s_info['avg']
@@ -202,7 +237,6 @@ for target_date_str in common_dates:
     max_peak_actual = c_info['peak']
     peak_hour_str = c_info['time']
     reserve_ratio = c_info['res']
-    lng_price = lng_dict.get(ym_str, 0.0)
     
     recent_7 = []
     for delta in range(7):
@@ -241,7 +275,7 @@ for target_date_str in common_dates:
     ai_summary = f"""
     <ul>
       <li><strong>수급 및 가격 지표:</strong> 최대전력수요 {max_peak_actual:,}MW({peak_hour_str}) 및 최고 SMP {max_smp:.2f}원/kWh가 {peak_band_label} 구간에 관찰됨.</li>
-      <li><strong>시장 동향:</strong> 가중평균 SMP는 {avg_smp:.2f}원/kWh(전일비 {diff_avg_smp:+}원)이며, 공급예비율 {reserve_ratio:.1f}% 수준임.</li>
+      <li><strong>시장 동향:</strong> 가중평균 SMP는 {avg_smp:.2f}원/kWh(전일비 {diff_avg_smp:+}원)이며, 당월 적용 LNG 단가는 {lng_price:,.1f}원/Nm³({diff_lng_text}), 공급예비율 {reserve_ratio:.1f}% 수준임.</li>
       <li><strong>발전원 구성:</strong> 기저발전(원자력·석탄) 중심 위에 주간 태양광 출력 정점 및 저녁 피크 LNG 램핑 대응 패턴이 확인됨.</li>
     </ul>
     """
@@ -298,9 +332,9 @@ for target_date_str in common_dates:
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-slate-50">
           <p class="text-xs font-bold text-slate-500 mb-1">LNG 단가 (당월)</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-700">{lng_price:,.1f}</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
+            <span class="text-2xl font-black text-slate-800">{lng_price:,.1f}</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 text-slate-400 tracking-tighter">입방당 합계</p>
+          <p class="text-[11px] font-semibold mt-1 {diff_lng_color}">{diff_lng_text}</p>
         </div>
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">가중평균 SMP</p>
@@ -464,9 +498,9 @@ for target_date_str in common_dates:
             annotations: {{
               peakBox: dynamicPeakAnnotation,
               maxPt: {{ type: 'point', xValue: {max_smp_idx}, yValue: {max_smp}, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' }},
-              maxLbl: {{ type: 'label', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 {max_smp:.2f}원'], font: {{ size: 11, weight: 'bold' }}, color: '#d93f3c', yAdjust: -15 }},
+              maxLbl: {{ type: 'label', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], font: {{ size: 11, weight: 'bold' }}, color: '#d93f3c', yAdjust: -15 }},
               minPt: {{ type: 'point', xValue: {min_smp_idx}, yValue: {min_smp}, backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' }},
-              minLbl: {{ type: 'label', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 {min_smp:.2f}원'], font: {{ size: 11, weight: 'bold' }}, color: '#005587', yAdjust: 15 }}
+              minLbl: {{ type: 'label', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], font: {{ size: 11, weight: 'bold' }}, color: '#005587', yAdjust: 15 }}
             }}
           }}
         }}
