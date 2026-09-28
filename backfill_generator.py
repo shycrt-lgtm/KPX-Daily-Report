@@ -224,10 +224,6 @@ for target_date_str in common_dates:
     max_smp_idx = land_smp.index(max_smp)
     min_smp_idx = land_smp.index(min_smp)
     
-    # SMP Y축 상한선 (천장 여백 15% 확보하여 라벨 잘림 원천 차단)
-    smp_y_max = round(max_smp * 1.18, 1)
-    smp_y_min = 0.0 if min_smp >= 0 else round(min_smp * 1.1, 1)
-    
     # 피크 밴드 보정 (중심점 기준 최대 5~6시간)
     smp_thresh = min_smp + (max_smp - min_smp) * 0.85
     left = max_smp_idx
@@ -292,7 +288,7 @@ for target_date_str in common_dates:
         
     prev_smp_str = f"{prev_month_smp:.2f}원/kWh" if prev_month_smp > 0 else "-"
     
-    # 00. Executive Summary (수급지표, 가격지표, 전원구성)
+    # 00. Executive Summary
     ai_summary = f"""
     <ul class="space-y-2">
       <li><strong>수급지표 :</strong> 최대전력수요 {peak_hour_str} 발생, 최대전력수요 {max_peak_actual:,}MW, 공급예비율 {reserve_ratio:.1f}%</li>
@@ -474,9 +470,9 @@ for target_date_str in common_dates:
       </div>
     </div>
 
-    <!-- 05. 주요 발전원 라인 차트 -->
+    <!-- 05. 주요 발전원 라인 차트 ((SMP 피크 밴드 중첩) 삭제 반영) -->
     <div>
-      <h2>05. 주요 발전원 시간대별 출력 추이 (SMP 피크 밴드 중첩)</h2>
+      <h2>05. 주요 발전원 시간대별 출력 추이</h2>
       <div class="chart-container"><canvas id="sourceLineChart"></canvas></div>
     </div>
 
@@ -525,9 +521,11 @@ for target_date_str in common_dates:
     Chart.register(crosshairPlugin);
 
     const labels = {json_hours};
+    
+    // 모든 그래프 공통 옵션: top padding을 35px로 주어 천장 잘림 방지
     const commonOptions = {{
       responsive: true, maintainAspectRatio: false,
-      layout: {{ padding: {{ top: 25, right: 15 }} }},
+      layout: {{ padding: {{ top: 35, right: 15, bottom: 5 }} }},
       interaction: {{ mode: 'index', intersect: false }},
       plugins: {{
         legend: {{ labels: {{ usePointStyle: true, font: {{ family: 'Noto Sans KR', size: 12 }} }} }},
@@ -539,7 +537,13 @@ for target_date_str in common_dates:
           bodyFont: {{ family: 'Noto Sans KR', size: 12 }}
         }}
       }},
-      scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }} }} }}
+      scales: {{ 
+        x: {{ grid: {{ display: false }} }}, 
+        y: {{ 
+          grid: {{ color: '#f1f5f9' }},
+          grace: '15%'
+        }} 
+      }}
     }};
 
     const dynamicPeakAnnotation = {{
@@ -548,7 +552,7 @@ for target_date_str in common_dates:
       label: {{ display: true, content: '{peak_band_label} 피크', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }}
     }};
 
-    // 02. SMP 차트 (Y축 상한선 smp_y_max 적용으로 라벨 잘림 원천 차단)
+    // 02. SMP 차트 (grace: 18% 추가로 최고점 라벨 천장 잘림 100% 차단)
     new Chart(document.getElementById('smpChart'), {{
       type: 'line',
       data: {{
@@ -563,10 +567,9 @@ for target_date_str in common_dates:
         scales: {{
           x: {{ grid: {{ display: false }} }},
           y: {{ 
-            min: {smp_y_min}, 
-            max: {smp_y_max}, 
             grid: {{ color: '#f1f5f9' }},
-            title: {{ display: true, text: '원/kWh' }}
+            title: {{ display: true, text: '원/kWh' }},
+            grace: '18%'
           }}
         }},
         plugins: {{
@@ -604,7 +607,13 @@ for target_date_str in common_dates:
           {{ label: 'ESS충전', data: {json.dumps(g_info['ess_chg'])}, backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }}
         ]
       }},
-      options: {{ ...commonOptions, scales: {{ x: {{ stacked: true, grid: {{ display: false }} }}, y: {{ stacked: true }} }} }}
+      options: {{ 
+        ...commonOptions, 
+        scales: {{ 
+          x: {{ stacked: true, grid: {{ display: false }} }}, 
+          y: {{ stacked: true, grace: '10%' }} 
+        }} 
+      }}
     }});
 
     // 05. 주요 발전원 라인 차트
@@ -621,7 +630,7 @@ for target_date_str in common_dates:
       options: {{ ...commonOptions, plugins: {{ ...commonOptions.plugins, annotation: {{ annotations: {{ box1: dynamicPeakAnnotation }} }} }} }}
     }});
 
-    // 06. SMP 스프레드 차트 (SMP 최고/최저 포인트 및 라벨 항시 표시 추가)
+    // 06. SMP 스프레드 차트 (최고/최저 SMP 항상 표시 및 Y1축 grace 18% 확보)
     new Chart(document.getElementById('spreadChart'), {{
       type: 'line',
       data: {{
@@ -635,25 +644,48 @@ for target_date_str in common_dates:
         ...commonOptions,
         scales: {{
           x: {{ grid: {{ display: false }} }},
-          y: {{ type: 'linear', display: true, position: 'left', title: {{ display: true, text: 'MW' }} }},
+          y: {{ 
+            type: 'linear', 
+            display: true, 
+            position: 'left', 
+            title: {{ display: true, text: 'MW' }},
+            grace: '15%'
+          }},
           y1: {{ 
             type: 'linear', 
             display: true, 
             position: 'right', 
             grid: {{ drawOnChartArea: false }}, 
             title: {{ display: true, text: '원/kWh' }},
-            min: {smp_y_min},
-            max: {smp_y_max}
+            grace: '18%'
           }}
         }},
         plugins: {{
           ...commonOptions.plugins,
           annotation: {{
             annotations: {{
-              spreadMaxPt: {{ type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: {max_smp_idx}, yValue: {max_smp}, backgroundColor: '#d93f3c', radius: 4, borderWidth: 2, borderColor: '#fff' }},
-              spreadMaxLbl: {{ type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], font: {{ size: 10, weight: 'bold' }}, color: '#d93f3c', yAdjust: -14 }},
-              spreadMinPt: {{ type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: {min_smp_idx}, yValue: {min_smp}, backgroundColor: '#005587', radius: 4, borderWidth: 2, borderColor: '#fff' }},
-              spreadMinLbl: {{ type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], font: {{ size: 10, weight: 'bold' }}, color: '#005587', yAdjust: 14 }}
+              spreadMaxPt: {{ 
+                type: 'point', xScaleID: 'x', yScaleID: 'y1', 
+                xValue: {max_smp_idx}, yValue: {max_smp}, 
+                backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' 
+              }},
+              spreadMaxLbl: {{ 
+                type: 'label', xScaleID: 'x', yScaleID: 'y1', 
+                xValue: {max_smp_idx}, yValue: {max_smp}, 
+                content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], 
+                font: {{ size: 10, weight: 'bold' }}, color: '#d93f3c', yAdjust: -14 
+              }},
+              spreadMinPt: {{ 
+                type: 'point', xScaleID: 'x', yScaleID: 'y1', 
+                xValue: {min_smp_idx}, yValue: {min_smp}, 
+                backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' 
+              }},
+              spreadMinLbl: {{ 
+                type: 'label', xScaleID: 'x', yScaleID: 'y1', 
+                xValue: {min_smp_idx}, yValue: {min_smp}, 
+                content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], 
+                font: {{ size: 10, weight: 'bold' }}, color: '#005587', yAdjust: 14 
+              }}
             }}
           }}
         }}
