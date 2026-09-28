@@ -63,70 +63,69 @@ for _, row in df_cap.iterrows():
     }
 print(f"수급실적 로딩 완료: {len(cap_dict)}일")
 
-# 3. 수요예측 로딩 (pssInland_YYYY.xlsx)
+# 3. 수요예측 로딩 (Timestamp 완벽 대응)
 pred_dict = {}
-pred_files = sorted(glob.glob("pssInland_*.xlsx"))
-for pf in pred_files:
-    df_p = pd.read_excel(pf)
-    header_idx = df_p[df_p.iloc[:, 0].astype(str).str.contains("구분|일자", na=False)].index
-    if len(header_idx) > 0:
-        df_p.columns = df_p.iloc[header_idx[0]]
-        df_p = df_p.iloc[header_idx[0]+1:].reset_index(drop=True)
-    for _, row in df_p.iterrows():
-        try:
-            d_val = str(row.iloc[0]).split('.')[0].strip()
-            if len(d_val) == 8 and d_val.isdigit():
-                vals = [float(str(row[f"{i}h"]).replace(',', '')) for i in range(1, 25)]
-                pred_dict[d_val] = vals
-        except:
-            continue
+for pf in sorted(glob.glob("pssInland_*.xlsx")):
+    df_p = pd.read_excel(pf, header=None)
+    for r in range(len(df_p)):
+        row = df_p.iloc[r]
+        raw_date = row.iloc[0]
+        if pd.isna(raw_date): continue
+        
+        d_val = ""
+        if isinstance(raw_date, datetime):
+            d_val = raw_date.strftime("%Y%m%d")
+        else:
+            c_str = str(raw_date).replace('-', '').replace('.', '').replace('/', '').split(' ')[0]
+            if len(c_str) >= 8 and c_str[:8].isdigit():
+                d_val = c_str[:8]
+        
+        if len(d_val) == 8:
+            vals = []
+            for v in row.iloc[1:]:
+                try:
+                    vals.append(float(str(v).replace(',', '').strip()))
+                except:
+                    pass
+            if len(vals) >= 24:
+                pred_dict[d_val] = vals[:24]
 print(f"수요예측 로딩 완료: {len(pred_dict)}일")
 
-# 4. LNG 단가 로딩 정밀화 (입방당 시트의 연도-합계 행 매핑)
+# 4. LNG 단가 로딩 정밀화 (전체 형태소 스캔 방식으로 병합 셀 무력화)
 lng_dict = {}
 lng_candidates = glob.glob("*LNG*.xlsx") + [f for f in glob.glob("*.xlsx") if "5." in f]
 if lng_candidates:
     lng_file = lng_candidates[0]
-    print(f"LNG 단가 파일 로딩 중: {lng_file}")
     df_lng = pd.read_excel(lng_file, sheet_name="입방당", header=None)
     
-    # 1) 헤더 행(1~12월 열 위치) 찾기
-    month_col_map = {}
-    header_row_idx = -1
-    for r in range(min(10, len(df_lng))):
-        row_vals = [str(x).strip().replace('월', '').replace('.0', '') for x in df_lng.iloc[r]]
-        found = {}
-        for m in range(1, 13):
-            if str(m) in row_vals:
-                found[m] = row_vals.index(str(m))
+    month_cols = {}
+    for r in range(min(15, len(df_lng))):
+        row_vals = [str(x).replace('.0','').replace('월','').strip() for x in df_lng.iloc[r]]
+        found = {m: row_vals.index(str(m)) for m in range(1, 13) if str(m) in row_vals}
         if len(found) >= 10:
-            month_col_map = found
-            header_row_idx = r
+            month_cols = found
             break
             
-    # 2) 연도 병합 셀 및 합계 행 값 추출
     current_year = None
-    for r in range(header_row_idx + 1, len(df_lng)):
-        col0_raw = str(df_lng.iloc[r, 0]).strip().replace('.0', '')
-        col1_raw = str(df_lng.iloc[r, 1]).strip()
+    for r in range(len(df_lng)):
+        row_strs = [str(x).replace(' ', '') for x in df_lng.iloc[r]]
         
-        # 4자리 숫자 연도 감지
-        if col0_raw.isdigit() and len(col0_raw) == 4:
-            current_year = int(col0_raw)
-            
-        if "합계" in col1_raw and current_year:
-            for m, col_idx in month_col_map.items():
-                val = df_lng.iloc[r, col_idx]
+        for cell in row_strs:
+            c_clean = cell.replace('.0', '')
+            if c_clean.isdigit() and len(c_clean) == 4 and int(c_clean) >= 2000:
+                current_year = int(c_clean)
+                break
+                
+        if any("합계" in c for c in row_strs) and current_year:
+            for m, c_idx in month_cols.items():
+                val = df_lng.iloc[r, c_idx]
                 try:
-                    val_str = str(val).replace(',', '').strip()
-                    if val_str and val_str not in ['-', 'nan', 'None']:
-                        val_num = float(val_str)
-                        if val_num > 0:
-                            lng_dict[f"{current_year}{m:02d}"] = val_num
+                    v = float(str(val).replace(',', '').strip())
+                    if v > 0:
+                        lng_dict[f"{current_year}{m:02d}"] = v
                 except:
                     pass
-
-print(f"LNG 단가 로딩 완료: 총 {len(lng_dict)}개월 데이터 확보 -> {lng_dict}")
+print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 확보")
 
 # 5. 발전원별 발전량 연도별 로딩 및 집계
 gen_dict = {}
@@ -189,13 +188,10 @@ for gf in gen_files:
             'actual_demand': [round(v, 1) for v in act_demand]
         }
 
-print(f"발전원 집계 완료: {len(gen_dict)}일")
-
 common_dates = sorted(list(set(smp_dict.keys()) & set(gen_dict.keys()) & set(cap_dict.keys())))
 latest_date_str = common_dates[-1]
 latest_dt = datetime.strptime(latest_date_str, "%Y%m%d")
 latest_date_dashed = latest_dt.strftime("%Y-%m-%d")
-print(f">> 최종 생성 대상 일수: {len(common_dates)}일 (최신일자: {latest_date_str})")
 
 hours = [f"{i}시" for i in range(1, 25)]
 json_hours = json.dumps(hours)
@@ -207,7 +203,6 @@ for target_date_str in common_dates:
     display_date = f"{dt.strftime('%Y년 %m월 %d일')}({w_kr})"
     target_date_dashed = dt.strftime("%Y-%m-%d")
     
-    # LNG 단가 및 전월비 변동 계산
     ym_str = target_date_str[:6]
     first_of_month = dt.replace(day=1)
     prev_month_dt = first_of_month - timedelta(days=1)
@@ -224,7 +219,6 @@ for target_date_str in common_dates:
         diff_lng_color = "text-slate-400"
         diff_lng_text = "-"
 
-    # SMP 및 피크
     s_info = smp_dict[target_date_str]
     land_smp = s_info['hourly']
     avg_smp = s_info['avg']
@@ -233,10 +227,19 @@ for target_date_str in common_dates:
     max_smp_idx = land_smp.index(max_smp)
     min_smp_idx = land_smp.index(min_smp)
     
+    # SMP 피크 구간 보정 (전 구간 피크 오류 방지)
     smp_thresh = min_smp + (max_smp - min_smp) * 0.85
-    high_smp_idx = [i for i, v in enumerate(land_smp) if v >= smp_thresh]
-    p_start = min(high_smp_idx) if high_smp_idx else max_smp_idx
-    p_end = max(high_smp_idx) if high_smp_idx else max_smp_idx
+    left = max_smp_idx
+    while left > 0 and land_smp[left-1] >= smp_thresh: left -= 1
+    right = max_smp_idx
+    while right < 23 and land_smp[right+1] >= smp_thresh: right += 1
+    
+    if (right - left) > 6:
+        left = max(0, max_smp_idx - 2)
+        right = min(23, max_smp_idx + 2)
+        
+    p_start = left
+    p_end = right
     peak_band_label = f"{p_start+1}~{p_end+1}시 피크"
     
     g_info = gen_dict[target_date_str]
@@ -329,7 +332,6 @@ for target_date_str in common_dates:
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
         <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">{display_date}</strong> | 육지 기준 종합 실적</p>
       </div>
-
       <div class="flex flex-col md:items-end gap-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
@@ -344,7 +346,6 @@ for target_date_str in common_dates:
             <svg class="w-3 h-3 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
         </div>
-
         <div class="flex flex-wrap items-center gap-2">
           {latest_button_html}
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
@@ -509,8 +510,11 @@ for target_date_str in common_dates:
     Chart.register(crosshairPlugin);
 
     const labels = {json_hours};
+    
+    // 차트 위쪽 라벨 잘림 방지용 Padding 강제 추가
     const commonOptions = {{
       responsive: true, maintainAspectRatio: false,
+      layout: {{ padding: {{ top: 35, right: 15 }} }},
       interaction: {{ mode: 'index', intersect: false }},
       plugins: {{
         legend: {{ labels: {{ usePointStyle: true, font: {{ family: 'Noto Sans KR', size: 12 }} }} }},
