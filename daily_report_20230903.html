@@ -268,7 +268,7 @@
     const labels = ["1\uc2dc", "2\uc2dc", "3\uc2dc", "4\uc2dc", "5\uc2dc", "6\uc2dc", "7\uc2dc", "8\uc2dc", "9\uc2dc", "10\uc2dc", "11\uc2dc", "12\uc2dc", "13\uc2dc", "14\uc2dc", "15\uc2dc", "16\uc2dc", "17\uc2dc", "18\uc2dc", "19\uc2dc", "20\uc2dc", "21\uc2dc", "22\uc2dc", "23\uc2dc", "24\uc2dc"];
     const commonOptions = {
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { top: 35, right: 15 } },
+      layout: { padding: { top: 25, right: 15 } },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { usePointStyle: true, font: { family: 'Noto Sans KR', size: 12 } } },
@@ -289,6 +289,7 @@
       label: { display: true, content: '12~16시 피크', position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} }
     };
 
+    // 02. SMP 차트 (Y축 상한선 smp_y_max 적용으로 라벨 잘림 원천 차단)
     new Chart(document.getElementById('smpChart'), {
       type: 'line',
       data: {
@@ -300,6 +301,15 @@
       },
       options: {
         ...commonOptions,
+        scales: {
+          x: { grid: { display: false } },
+          y: { 
+            min: 0.0, 
+            max: 178.0, 
+            grid: { color: '#f1f5f9' },
+            title: { display: true, text: '원/kWh' }
+          }
+        },
         plugins: {
           ...commonOptions.plugins,
           annotation: {
@@ -315,6 +325,7 @@
       }
     });
 
+    // 04. 발전원별 구성 차트
     new Chart(document.getElementById('generationChart'), {
       type: 'line',
       data: {
@@ -337,6 +348,7 @@
       options: { ...commonOptions, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } } }
     });
 
+    // 05. 주요 발전원 라인 차트
     new Chart(document.getElementById('sourceLineChart'), {
       type: 'line',
       data: {
@@ -350,6 +362,7 @@
       options: { ...commonOptions, plugins: { ...commonOptions.plugins, annotation: { annotations: { box1: dynamicPeakAnnotation } } } }
     });
 
+    // 06. SMP 스프레드 차트 (SMP 최고/최저 포인트 및 라벨 항시 표시 추가)
     new Chart(document.getElementById('spreadChart'), {
       type: 'line',
       data: {
@@ -364,7 +377,26 @@
         scales: {
           x: { grid: { display: false } },
           y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'MW' } },
-          y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '원/kWh' } }
+          y1: { 
+            type: 'linear', 
+            display: true, 
+            position: 'right', 
+            grid: { drawOnChartArea: false }, 
+            title: { display: true, text: '원/kWh' },
+            min: 0.0,
+            max: 178.0
+          }
+        },
+        plugins: {
+          ...commonOptions.plugins,
+          annotation: {
+            annotations: {
+              spreadMaxPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 13, yValue: 150.82, backgroundColor: '#d93f3c', radius: 4, borderWidth: 2, borderColor: '#fff' },
+              spreadMaxLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 13, yValue: 150.82, content: ['최고 ' + Number(150.82).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#d93f3c', yAdjust: -14 },
+              spreadMinPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 4, yValue: 102.53, backgroundColor: '#005587', radius: 4, borderWidth: 2, borderColor: '#fff' },
+              spreadMinLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 4, yValue: 102.53, content: ['최저 ' + Number(102.53).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#005587', yAdjust: 14 }
+            }
+          }
         }
       }
     });
