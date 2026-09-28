@@ -48,8 +48,8 @@
         <div class="flex flex-wrap items-center gap-2">
           
       <a href="daily_report_20260927.html" 
-         class="inline-flex items-center gap-1 px-3 py-1.5 bg-[#001f3f] text-white hover:bg-slate-800 text-xs font-bold rounded shadow transition">
-        <span>최신 실적(09.27)으로</span> &rarr;
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition" title="확정된 가장 최근 실적일로 이동">
+        <span>⚡ 최신 실적(09.27)으로</span> &rarr;
       </a>
     
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
@@ -227,14 +227,6 @@
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
       <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
     </div>
-
-    <!-- 07. 전력시장 시간대별 수요 실적 추이 -->
-    <div>
-      <h2>07. 전력시장 시간대별 수요 실적 추이</h2>
-      <div class="chart-container">
-        <canvas id="demandLineChart"></canvas>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -375,17 +367,6 @@
           y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '원/kWh' } }
         }
       }
-    });
-
-    new Chart(document.getElementById('demandLineChart'), {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [
-          { label: '전력시장 수요실적 (MW)', data: [41496.7, 39109.0, 37489.3, 37422.2, 38301.1, 39881.5, 42698.0, 47653.0, 54278.4, 54663.8, 53243.8, 51110.4, 48481.1, 48498.2, 48801.3, 49099.7, 50196.8, 50284.2, 49380.6, 47977.3, 46093.7, 44161.9, 43795.6, 43452.4], pointStyle: 'line', borderColor: '#001f3f', backgroundColor: 'rgba(0, 31, 63, 0.05)', fill: true, borderWidth: 3, pointRadius: 2, pointHoverRadius: 5, tension: 0.2 }
-        ]
-      },
-      options: { ...commonOptions }
     });
   </script>
 </body>
