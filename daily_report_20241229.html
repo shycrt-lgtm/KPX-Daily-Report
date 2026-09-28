@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>일일 전력시장 종합 리포트</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; background-color: #ffffff; color: #1a1a1a; }
+    .mckinsey-border { border-top: 4px solid #001f3f; }
+    .chart-container { position: relative; height: 450px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }
+    table th, table td { border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }
+    table th { background-color: #f8fafc; font-weight: 700; color: #334155; }
+    .text-holiday { color: #dc2626; font-weight: 700; }
+    h2 { font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+    .summary-box li { margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+  <div class="max-w-6xl mx-auto space-y-8">
+    <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+      <div>
+        <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 일일 요약 (KPX)</h1>
+        <p class="text-sm text-slate-500 mt-1">기준일: 2024년 12월 29일 | 육지 기준 종합 실적</p>
+      </div>
+      <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg shadow-sm">
+        <label for="historyDate" class="text-sm font-bold text-slate-700">조회일자:</label>
+        <input type="date" id="historyDate" min="2022-01-01" max="2026-12-31" value="2024-12-29" 
+               class="bg-transparent text-sm font-bold text-slate-900 outline-none cursor-pointer"
+               onchange="if(this.value) window.location.href='daily_report_' + this.value.replace(/-/g, '') + '.html';">
+      </div>
+    </div>
+
+    <div>
+      <h2>00. Executive Summary</h2>
+      <div class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium summary-box">
+        
+    <ul>
+      <li><strong>수급 및 가격 지표:</strong> 최대전력수요 66,449MW(19:00) 및 최고 SMP 93.56원/kWh가 1~24시 피크 구간에 관찰됨.</li>
+      <li><strong>시장 동향:</strong> 가중평균 SMP는 85.51원/kWh(전일비 -6.68원)이며, 공급예비율 61.1% 수준임.</li>
+      <li><strong>발전원 구성:</strong> 기저발전(원자력·석탄) 중심 위에 주간 태양광 출력 정점 및 저녁 피크 LNG 램핑 대응 패턴이 확인됨.</li>
+    </ul>
+    
+      </div>
+    </div>
+
+    <div>
+      <h2>01. 전일 전력시장 실적요약</h2>
+      <div class="grid grid-cols-2 md:grid-cols-7 gap-0 border border-slate-200">
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-slate-50">
+          <p class="text-xs font-bold text-slate-500 mb-1">LNG 단가 (당월)</p>
+          <div class="flex items-end gap-1">
+            <span class="text-2xl font-black text-slate-700">0.0</span><span class="text-[11px] font-medium pb-1">원/Nm³</span>
+          </div>
+          <p class="text-[11px] font-semibold mt-1 text-slate-400 tracking-tighter">입방당 합계</p>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">가중평균 SMP</p>
+          <div class="flex items-end gap-1">
+            <span class="text-2xl font-black text-slate-900">85.51</span><span class="text-xs font-medium pb-1">원</span>
+          </div>
+          <p class="text-[11px] font-semibold mt-1 text-blue-600">전일비 -6.68원</p>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-rose-50/30">
+          <p class="text-xs font-bold text-slate-500 mb-1">최고 SMP</p>
+          <div class="flex items-end gap-1">
+            <span class="text-2xl font-black text-[#d93f3c]">93.56</span><span class="text-xs font-medium pb-1">원</span>
+          </div>
+          <p class="text-[11px] font-semibold mt-1 text-blue-600">전일비 -0.27원</p>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">최저 SMP</p>
+          <div class="flex items-end gap-1">
+            <span class="text-2xl font-black text-slate-900">73.69</span><span class="text-xs font-medium pb-1">원</span>
+          </div>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">최대전력 (피크)</p>
+          <div class="flex items-end gap-1">
+            <span class="text-2xl font-black text-slate-900">66,449</span><span class="text-xs font-medium pb-1">MW</span>
+          </div>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">피크 발생시간</p>
+          <div class="flex items-end gap-1">
+            <span class="text-2xl font-black text-slate-900">19:00</span>
+          </div>
+        </div>
+        <div class="p-4 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">공급예비율</p>
+          <div class="flex items-end gap-1">
+            <span class="text-2xl font-black text-emerald-600">61.1</span><span class="text-xs font-medium pb-1">%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
+      <div class="chart-container"><canvas id="smpChart"></canvas></div>
+    </div>
+
+    <div>
+      <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead>
+            <tr>
+              <th rowspan="2">구분</th><th colspan="3">SMP (원/kWh)</th><th colspan="4">전력수급 실적 (MW)</th>
+            </tr>
+            <tr>
+              <th>가중평균</th><th>최고</th><th>최저</th><th>공급능력</th><th>최대전력</th><th>피크</th><th>예비율</th>
+            </tr>
+          </thead>
+          <tbody>
+        <tr class="bg-slate-50 font-bold">
+            <td class="text-holiday">12.29(일)</td>
+            <td>85.51</td><td>93.56</td><td>73.69</td>
+            <td>107,042</td><td>66,449</td><td>19:00</td><td>61.1%</td>
+        </tr>
+        
+        <tr class="">
+            <td class="text-holiday">12.28(토)</td>
+            <td>92.19</td><td>93.83</td><td>84.67</td>
+            <td>103,371</td><td>68,926</td><td>19:00</td><td>50.0%</td>
+        </tr>
+        
+        <tr class="">
+            <td class="">12.27(금)</td>
+            <td>116.57</td><td>150.82</td><td>81.71</td>
+            <td>109,010</td><td>81,190</td><td>09:00</td><td>34.3%</td>
+        </tr>
+        
+        <tr class="">
+            <td class="">12.26(목)</td>
+            <td>121.42</td><td>168.78</td><td>81.25</td>
+            <td>108,778</td><td>80,251</td><td>10:00</td><td>35.5%</td>
+        </tr>
+        
+        <tr class="">
+            <td class="">12.25(수)</td>
+            <td>110.88</td><td>145.72</td><td>91.63</td>
+            <td>104,570</td><td>69,280</td><td>19:00</td><td>50.9%</td>
+        </tr>
+        
+        <tr class="">
+            <td class="">12.24(화)</td>
+            <td>126.51</td><td>166.22</td><td>91.50</td>
+            <td>105,243</td><td>82,612</td><td>09:00</td><td>27.4%</td>
+        </tr>
+        
+        <tr class="">
+            <td class="">12.23(월)</td>
+            <td>129.42</td><td>172.49</td><td>88.64</td>
+            <td>106,073</td><td>82,905</td><td>10:00</td><td>27.9%</td>
+        </tr>
+        </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <h2>04. 발전원별 실시간 수급 구성 및 순부하</h2>
+      <div class="chart-container"><canvas id="generationChart"></canvas></div>
+      <div class="mt-3 bg-slate-50 border border-slate-200 p-4 rounded text-sm text-slate-800 font-medium">
+        💡 <strong>분석 의견:</strong> 주간 태양광 발전량 증가로 순부하 최저점을 형성하였으며, 일몰 후 저녁 피크 램핑 수요를 LNG 및 양수/ESS가 안정적으로 전담함.
+      </div>
+    </div>
+
+    <div>
+      <h2>05. 주요 발전원 시간대별 출력 추이 (SMP 피크 밴드 중첩)</h2>
+      <div class="chart-container"><canvas id="sourceLineChart"></canvas></div>
+    </div>
+
+    <div>
+      <h2>06. SMP 스프레드</h2>
+      <div class="chart-container"><canvas id="spreadChart"></canvas></div>
+      <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
+    </div>
+
+    <div>
+      <h2>07. 하루전 수요예측 vs 전력시장 수요 실적</h2>
+      <div class="border border-slate-200 p-4 bg-white space-y-4">
+        <div>
+          <span class="text-xs font-bold text-slate-500 block mb-1">■ 전력수요 추이 (단위: MW)</span>
+          <div class="relative h-[280px] w-full"><canvas id="demandLineChart"></canvas></div>
+        </div>
+        <div class="border-t border-slate-100 pt-3">
+          <span class="text-xs font-bold text-slate-500 block mb-1">■ 실적 - 예측 오차 (단위: MW)</span>
+          <div class="relative h-[160px] w-full"><canvas id="demandDiffBarChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    Chart.register(window['chartjs-plugin-annotation']);
+    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {
+      return eventPosition ? { x: eventPosition.x, y: eventPosition.y } : false;
+    };
+    const crosshairPlugin = {
+      id: 'crosshair',
+      afterDraw: chart => {
+        if (chart.tooltip && chart.tooltip._active && chart.tooltip._active.length) {
+          const activePoint = chart.tooltip._active[0];
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(activePoint.element.x, chart.chartArea.top);
+          ctx.lineTo(activePoint.element.x, chart.chartArea.bottom);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(100, 116, 139, 0.7)';
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    };
+    Chart.register(crosshairPlugin);
+
+    const labels = ["1\uc2dc", "2\uc2dc", "3\uc2dc", "4\uc2dc", "5\uc2dc", "6\uc2dc", "7\uc2dc", "8\uc2dc", "9\uc2dc", "10\uc2dc", "11\uc2dc", "12\uc2dc", "13\uc2dc", "14\uc2dc", "15\uc2dc", "16\uc2dc", "17\uc2dc", "18\uc2dc", "19\uc2dc", "20\uc2dc", "21\uc2dc", "22\uc2dc", "23\uc2dc", "24\uc2dc"];
+    const commonOptions = {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { usePointStyle: true, font: { family: 'Noto Sans KR', size: 12 } } },
+        tooltip: {
+          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1,
+          padding: 10, boxPadding: 4, usePointStyle: true,
+          titleFont: { family: 'Noto Sans KR', size: 13, weight: 'bold' },
+          bodyFont: { family: 'Noto Sans KR', size: 12 }
+        }
+      },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' } } }
+    };
+
+    const dynamicPeakAnnotation = {
+      type: 'box', xMin: 0, xMax: 23,
+      backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
+      label: { display: true, content: '1~24시 피크', position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} }
+    };
+
+    new Chart(document.getElementById('smpChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '시간대별 SMP (원/kWh)', data: [92.11, 83.88, 82.48, 81.64, 81.8, 82.48, 83.88, 83.88, 83.88, 79.8, 79.14, 78.55, 73.69, 78.55, 78.43, 80.13, 83.88, 93.56, 93.56, 93.56, 93.56, 93.56, 93.56, 93.56], pointStyle: 'line',
+          borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1
+        }]
+      },
+      options: {
+        ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          annotation: {
+            annotations: {
+              peakBox: dynamicPeakAnnotation,
+              maxPt: { type: 'point', xValue: 17, yValue: 93.56, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' },
+              maxLbl: { type: 'label', xValue: 17, yValue: 93.56, content: ['최고 93.56원'], font: { size: 11, weight: 'bold' }, color: '#d93f3c', yAdjust: -15 },
+              minPt: { type: 'point', xValue: 12, yValue: 73.69, backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' },
+              minLbl: { type: 'label', xValue: 12, yValue: 73.69, content: ['최저 73.69원'], font: { size: 11, weight: 'bold' }, color: '#005587', yAdjust: 15 }
+            }
+          }
+        }
+      }
+    });
+
+    new Chart(document.getElementById('generationChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { type: 'line', label: '순부하 (태양광/풍력 제외)', data: [42330.9, 38897.4, 38564.7, 38563.7, 38554.8, 38606.9, 38871.4, 39843.0, 40215.9, 39040.8, 37465.0, 36310.6, 35497.7, 35823.3, 37591.2, 39915.4, 42765.9, 45991.0, 47067.6, 46831.6, 46044.3, 44797.6, 44098.6, 43439.8], pointStyle: 'line', borderColor: '#1a1a1a', borderDash: [4,4], borderWidth: 2, pointRadius: 0, fill: false, z: 10, stack: 'netload_stack' },
+          { label: '원자력', data: [23104.0, 23107.4, 23107.8, 23109.7, 23101.2, 23108.2, 23104.5, 23104.8, 23103.2, 23102.9, 23103.9, 23110.2, 23109.8, 23115.3, 23113.5, 23111.8, 23109.4, 23109.5, 23113.6, 23112.5, 23111.0, 23109.6, 23108.8, 23104.0], backgroundColor: '#f59e0b', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '석탄', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#b45309', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '유류', data: [221.3, 225.2, 220.2, 220.0, 219.9, 220.0, 259.6, 307.7, 326.2, 308.6, 291.3, 285.4, 243.0, 231.4, 241.2, 285.4, 308.1, 363.9, 396.4, 393.3, 393.7, 374.3, 364.3, 364.4], backgroundColor: '#475569', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: 'LNG', data: [17935.4, 15512.6, 15202.2, 15199.5, 15191.7, 15235.5, 15464.3, 16387.5, 16398.4, 15068.5, 13504.9, 12403.1, 11733.7, 12071.0, 13790.0, 16005.7, 18532.7, 20508.9, 21345.2, 20993.0, 20191.7, 19030.1, 18390.2, 17902.5], backgroundColor: '#fde047', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '수력', data: [34.7, 34.5, 34.5, 34.4, 42.0, 43.2, 43.0, 43.1, 384.0, 560.8, 564.9, 511.9, 411.3, 405.6, 446.6, 512.5, 391.3, 246.8, 174.9, 210.5, 182.8, 79.4, 44.2, 38.4], backgroundColor: '#38bdf8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '양수발전', data: [1035.4, 17.7, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 424.5, 1761.9, 2037.5, 2122.3, 2165.1, 2204.3, 2191.2, 2030.5], backgroundColor: '#0284c7', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: 'ESS방전', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#1d4ed8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '풍력', data: [1071.0, 1021.3, 1053.1, 1097.8, 1061.0, 983.0, 893.6, 772.4, 658.1, 631.3, 599.9, 518.6, 531.0, 572.5, 602.7, 535.0, 519.7, 604.5, 580.0, 573.0, 582.3, 647.2, 640.6, 650.5], backgroundColor: '#22c55e', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '태양광', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.4, 11.6, 280.3, 1488.4, 3269.5, 4386.2, 4945.4, 4964.6, 4302.3, 2758.9, 1009.9, 114.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#ef4444', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '양수펌핑(충전)', data: [0.0, 0.0, -1255.0, -1845.5, -2088.7, -1656.8, -294.0, 0.0, 0.0, -684.2, -1380.0, -1964.3, -2398.2, -2678.4, -2619.8, -1427.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#94a3b8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: 'ESS충전', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }
+        ]
+      },
+      options: { ...commonOptions, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } } }
+    });
+
+    new Chart(document.getElementById('sourceLineChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'LNG', data: [17935.4, 15512.6, 15202.2, 15199.5, 15191.7, 15235.5, 15464.3, 16387.5, 16398.4, 15068.5, 13504.9, 12403.1, 11733.7, 12071.0, 13790.0, 16005.7, 18532.7, 20508.9, 21345.2, 20993.0, 20191.7, 19030.1, 18390.2, 17902.5], pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+          { label: '석탄', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], pointStyle: 'line', borderColor: '#d93f3c', borderDash: [5,5], borderWidth: 2, pointRadius: 0, tension: 0.3 },
+          { label: '신재생(태양광)', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.4, 11.6, 280.3, 1488.4, 3269.5, 4386.2, 4945.4, 4964.6, 4302.3, 2758.9, 1009.9, 114.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2, pointRadius: 0, tension: 0.3 }
+        ]
+      },
+      options: { ...commonOptions, plugins: { ...commonOptions.plugins, annotation: { annotations: { box1: dynamicPeakAnnotation } } } }
+    });
+
+    new Chart(document.getElementById('spreadChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { type: 'line', label: '유연성 자원 순공급 (양수/ESS)', yAxisID: 'y', data: [1035.4, 17.7, -1255.0, -1845.5, -2088.7, -1656.8, -294.0, 0.0, 4.0, -684.2, -1380.0, -1964.3, -2398.2, -2678.4, -2619.8, -1427.4, 424.5, 1761.9, 2037.5, 2122.3, 2165.1, 2204.3, 2191.2, 2030.5], pointStyle: 'line', borderColor: '#059669', borderWidth: 2.5, tension: 0.3 },
+          { type: 'line', label: '계통한계가격(SMP)', yAxisID: 'y1', data: [92.11, 83.88, 82.48, 81.64, 81.8, 82.48, 83.88, 83.88, 83.88, 79.8, 79.14, 78.55, 73.69, 78.55, 78.43, 80.13, 83.88, 93.56, 93.56, 93.56, 93.56, 93.56, 93.56, 93.56], pointStyle: 'line', borderColor: '#005587', borderDash: [4,4], borderWidth: 1.5, tension: 0.3 }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          x: { grid: { display: false } },
+          y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'MW' } },
+          y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '원/kWh' } }
+        }
+      }
+    });
+
+    new Chart(document.getElementById('demandLineChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: '하루전 수요예측', data: [43401.9, 39918.7, 39617.8, 39661.5, 39615.8, 39589.9, 39771.4, 40627.0, 41154.3, 41160.5, 41334.4, 41215.4, 40974.1, 41360.4, 42496.2, 43209.3, 44295.6, 46709.7, 47647.6, 47404.6, 46626.6, 45444.8, 44739.2, 44090.2], pointStyle: 'line', borderColor: '#005587', borderDash: [5,5], borderWidth: 2, pointRadius: 0, tension: 0.3 },
+          { label: '전력시장 수요실적', data: [43401.9, 39918.7, 39617.8, 39661.5, 39615.8, 39589.9, 39771.4, 40627.0, 41154.3, 41160.5, 41334.4, 41215.4, 40974.1, 41360.4, 42496.2, 43209.3, 44295.6, 46709.7, 47647.6, 47404.6, 46626.6, 45444.8, 44739.2, 44090.2], pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+        ]
+      },
+      options: { ...commonOptions }
+    });
+
+    new Chart(document.getElementById('demandDiffBarChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{ label: '실적 - 예측 오차 (MW)', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], pointStyle: 'rect', backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: '#2563eb', borderWidth: 1 }]
+      },
+      options: { ...commonOptions, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' } } } }
+    });
+  </script>
+</body>
+</html>
