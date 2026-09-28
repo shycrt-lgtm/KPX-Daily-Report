@@ -146,10 +146,6 @@ for gf in gen_files:
         ess_dis = [max(0.0, v) for v in ess]
         ess_chg = [min(0.0, v) for v in ess]
         
-        act_demand = [
-            nuc[i] + coal[i] + oil[i] + gas[i] + hydro[i] + pump_gen[i] + ess_dis[i] + wind[i] + solar[i]
-            for i in range(24)
-        ]
         net_ld = [nuc[i] + coal[i] + oil[i] + gas[i] + hydro[i] + pump_gen[i] + ess_dis[i] for i in range(24)]
         spread = [pump[i] + ess[i] for i in range(24)]
         
@@ -166,8 +162,7 @@ for gf in gen_files:
             'wind': [round(v, 1) for v in wind],
             'solar': [round(v, 1) for v in solar],
             'net_load': [round(v, 1) for v in net_ld],
-            'spread': [round(v, 1) for v in spread],
-            'actual_demand': [round(v, 1) for v in act_demand]
+            'spread': [round(v, 1) for v in spread]
         }
 
 print(f"발전원 집계 완료: {len(gen_dict)}일")
@@ -245,8 +240,6 @@ for target_date_str in common_dates:
     peak_band_label = f"{p_start+1}~{p_end+1}시"
     
     g_info = gen_dict[target_date_str]
-    actual_demand = g_info['actual_demand']
-    
     c_info = cap_dict[target_date_str]
     max_peak_actual = c_info['peak']
     peak_hour_str = c_info['time']
@@ -295,7 +288,7 @@ for target_date_str in common_dates:
         
     prev_smp_str = f"{prev_month_smp:.2f}원/kWh" if prev_month_smp > 0 else "-"
     
-    # 00. Executive Summary (요청하신 3대 구성: 수급지표, 가격지표, 전원구성)
+    # 00. Executive Summary
     ai_summary = f"""
     <ul class="space-y-2">
       <li><strong>수급지표 :</strong> 최대전력수요 {peak_hour_str} 발생, 최대전력수요 {max_peak_actual:,}MW, 공급예비율 {reserve_ratio:.1f}%</li>
@@ -308,11 +301,11 @@ for target_date_str in common_dates:
     """
     ai_gen_summary = f"주간 태양광 발전량 증가로 순부하 최저점을 형성하였으며, 일몰 후 저녁 피크 램핑 수요를 LNG 및 양수/ESS가 안정적으로 전담함."
 
-    is_latest = (target_date_str == latest_date_str)
-    latest_button_html = "" if is_latest else f"""
+    # 최신 실적 이동 버튼
+    latest_button_html = f"""
       <a href="daily_report_{latest_date_str}.html" 
-         class="inline-flex items-center gap-1 px-3 py-1.5 bg-[#001f3f] text-white hover:bg-slate-800 text-xs font-bold rounded shadow transition">
-        <span>최신 실적({latest_dt.strftime('%m.%d')})으로</span> &rarr;
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition" title="확정된 가장 최근 실적일로 이동">
+        <span>⚡ 최신 실적({latest_dt.strftime('%m.%d')})으로</span> &rarr;
       </a>
     """
 
@@ -489,14 +482,6 @@ for target_date_str in common_dates:
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
       <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
     </div>
-
-    <!-- 07. 전력시장 시간대별 수요 실적 추이 -->
-    <div>
-      <h2>07. 전력시장 시간대별 수요 실적 추이</h2>
-      <div class="chart-container">
-        <canvas id="demandLineChart"></canvas>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -637,17 +622,6 @@ for target_date_str in common_dates:
           y1: {{ type: 'linear', display: true, position: 'right', grid: {{ drawOnChartArea: false }}, title: {{ display: true, text: '원/kWh' }} }}
         }}
       }}
-    }});
-
-    new Chart(document.getElementById('demandLineChart'), {{
-      type: 'line',
-      data: {{
-        labels: labels,
-        datasets: [
-          {{ label: '전력시장 수요실적 (MW)', data: {json.dumps(actual_demand)}, pointStyle: 'line', borderColor: '#001f3f', backgroundColor: 'rgba(0, 31, 63, 0.05)', fill: true, borderWidth: 3, pointRadius: 2, pointHoverRadius: 5, tension: 0.2 }}
-        ]
-      }},
-      options: {{ ...commonOptions }}
     }});
   </script>
 </body>
