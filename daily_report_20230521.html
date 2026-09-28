@@ -7,6 +7,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+  
+  <!-- 공휴일/주말 빨간색 렌더링용 Flatpickr 달력 플러그인 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -16,9 +22,26 @@
     .chart-container { position: relative; height: 450px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }
     table th, table td { border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }
     table th { background-color: #f8fafc; font-weight: 700; color: #334155; }
-    .text-holiday { color: #dc2626; font-weight: 700; }
+    .text-holiday { color: #dc2626 !important; font-weight: 700; }
     h2 { font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
     .summary-box li { margin-bottom: 0.5rem; }
+
+    /* 달력 팝업 내 일요일, 토요일, 대한민국 공휴일 빨간색 강제 적용 */
+    .flatpickr-calendar .flatpickr-day.holiday-day,
+    .flatpickr-calendar .flatpickr-day.weekend-day {
+      color: #dc2626 !important;
+      font-weight: 700 !important;
+    }
+    .flatpickr-calendar .flatpickr-day.selected.holiday-day,
+    .flatpickr-calendar .flatpickr-day.selected.weekend-day {
+      background: #001f3f !important;
+      color: #ffffff !important;
+    }
+    .flatpickr-calendar .flatpickr-weekday:first-child,
+    .flatpickr-calendar .flatpickr-weekday:last-child {
+      color: #dc2626 !important;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body class="p-4 md:p-8">
@@ -27,7 +50,7 @@
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
-        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-slate-800">2023년 05월 21일(일)</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
+        <p class="text-sm text-slate-500 mt-1">기준일: <strong class="text-rose-600">2023년 05월 21일(일)</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
       </div>
 
       <div class="flex flex-col md:items-end gap-2">
@@ -53,11 +76,10 @@
       </a>
     
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-            <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700">조회일자:</label>
-            <input type="date" id="historyDate" min="2022-01-01" max="2026-09-27" value="2023-05-21" 
-                   class="bg-transparent text-xs md:text-sm font-bold text-slate-900 outline-none cursor-pointer"
-                   onchange="handleDateChange(this.value)">
-            <span class="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">(일)</span>
+            <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
+            <input type="text" id="historyDate" value="2023-05-21" 
+                   class="bg-transparent text-xs md:text-sm font-bold text-rose-600 outline-none cursor-pointer w-24 text-center" readonly>
+            <span class="text-xs font-bold px-1.5 py-0.5 rounded border text-rose-600 bg-rose-50 border-rose-200" title="주말">(일)</span>
           </div>
         </div>
       </div>
@@ -230,16 +252,36 @@
   </div>
 
   <script>
-    function handleDateChange(val) {
-      if(!val) return;
-      const latest = "2026-09-27";
-      if(val > latest) {
-        alert("오늘 실시간 수급현황 및 SMP는 상단의 [KPX 실시간 바로가기] 버튼을 통해 확인하실 수 있습니다.\n\n일일 종합 분석 리포트는 24시간 마감 후 익일 아침 발행됩니다. 확정 최신일(" + latest + ")로 이동합니다.");
-        window.location.href = "daily_report_20260927.html";
-        return;
+    const holidaysList = ["2022-01-01", "2022-01-31", "2022-02-01", "2022-02-02", "2022-03-01", "2022-03-09", "2022-05-05", "2022-05-08", "2022-06-01", "2022-06-06", "2022-08-15", "2022-09-09", "2022-09-10", "2022-09-11", "2022-09-12", "2022-10-03", "2022-10-09", "2022-10-10", "2022-12-25", "2023-01-01", "2023-01-21", "2023-01-22", "2023-01-23", "2023-01-24", "2023-03-01", "2023-05-05", "2023-05-27", "2023-05-29", "2023-06-06", "2023-08-15", "2023-09-28", "2023-09-29", "2023-09-30", "2023-10-02", "2023-10-03", "2023-10-09", "2023-12-25", "2024-01-01", "2024-02-09", "2024-02-10", "2024-02-11", "2024-02-12", "2024-03-01", "2024-04-10", "2024-05-05", "2024-05-06", "2024-05-15", "2024-06-06", "2024-08-15", "2024-09-16", "2024-09-17", "2024-09-18", "2024-10-01", "2024-10-03", "2024-10-09", "2024-12-25", "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30", "2025-03-01", "2025-03-03", "2025-05-05", "2025-05-06", "2025-06-06", "2025-08-15", "2025-10-03", "2025-10-05", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-12-25", "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02", "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-03", "2026-06-06", "2026-08-15", "2026-08-17", "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-05", "2026-10-09", "2026-12-25", "2027-01-01", "2027-02-06", "2027-02-07", "2027-02-08", "2027-02-09", "2027-03-01", "2027-03-03", "2027-05-05", "2027-05-13", "2027-06-06", "2027-08-15", "2027-08-16", "2027-09-14", "2027-09-15", "2027-09-16", "2027-10-03", "2027-10-04", "2027-10-09", "2027-10-11", "2027-12-25"];
+
+    // 주말 및 대한민국 공휴일 달력 빨간색 렌더링
+    flatpickr("#historyDate", {
+      locale: "ko",
+      dateFormat: "Y-m-d",
+      defaultDate: "2023-05-21",
+      minDate: "2022-01-01",
+      maxDate: "2026-09-27",
+      onDayCreate: function(dObj, dStr, fp, dayElem) {
+        const dateStr = flatpickr.formatDate(dayElem.dateObj, "Y-m-d");
+        const dayOfWeek = dayElem.dateObj.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          dayElem.classList.add("weekend-day");
+        }
+        if (holidaysList.includes(dateStr)) {
+          dayElem.classList.add("holiday-day");
+        }
+      },
+      onChange: function(selectedDates, dateStr) {
+        if (!dateStr) return;
+        const latest = "2026-09-27";
+        if (dateStr > latest) {
+          alert("오늘 실시간 수급현황 및 SMP는 상단의 [KPX 실시간 바로가기] 버튼을 통해 확인하실 수 있습니다.\n\n일일 종합 분석 리포트는 24시간 마감 후 익일 아침 발행됩니다. 확정 최신일(" + latest + ")로 이동합니다.");
+          window.location.href = "daily_report_20260927.html";
+          return;
+        }
+        window.location.href = "daily_report_" + dateStr.replace(/-/g, '') + ".html";
       }
-      window.location.href = "daily_report_" + val.replace(/-/g, '') + ".html";
-    }
+    });
 
     Chart.register(window['chartjs-plugin-annotation']);
     Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {
