@@ -32,7 +32,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: |
-          python backfill_generator.py
+          python build_report.py
 
       - name: Commit and Push Updated Report
         run: |
