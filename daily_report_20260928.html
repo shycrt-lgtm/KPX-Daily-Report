@@ -7,11 +7,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
-  
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -24,34 +22,14 @@
     .text-holiday { color: #dc2626 !important; font-weight: 700; }
     h2 { font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
     .summary-box li { margin-bottom: 0.5rem; }
-
     .flatpickr-calendar { border: 1px solid #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); }
     .flatpickr-calendar .flatpickr-day.holiday-day,
-    .flatpickr-calendar .flatpickr-day.weekend-day {
-      color: #dc2626 !important;
-      font-weight: 700 !important;
-    }
-    .flatpickr-calendar .flatpickr-day.holiday-day::after {
-      content: '';
-      position: absolute;
-      bottom: 3px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background-color: #dc2626;
-    }
+    .flatpickr-calendar .flatpickr-day.weekend-day { color: #dc2626 !important; font-weight: 700 !important; }
+    .flatpickr-calendar .flatpickr-day.holiday-day::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background-color: #dc2626; }
     .flatpickr-calendar .flatpickr-day.selected.holiday-day,
-    .flatpickr-calendar .flatpickr-day.selected.weekend-day {
-      background: #001f3f !important;
-      color: #ffffff !important;
-    }
+    .flatpickr-calendar .flatpickr-day.selected.weekend-day { background: #001f3f !important; color: #ffffff !important; }
     .flatpickr-calendar .flatpickr-weekday:first-child,
-    .flatpickr-calendar .flatpickr-weekday:last-child {
-      color: #dc2626 !important;
-      font-weight: 700;
-    }
+    .flatpickr-calendar .flatpickr-weekday:last-child { color: #dc2626 !important; font-weight: 700; }
   </style>
 </head>
 <body class="p-4 md:p-8">
@@ -95,9 +73,9 @@
       <div class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium summary-box">
         
 <ul class="space-y-2">
-  <li><strong>수급지표 :</strong> 최대전력수요 19:00 발생, 최대전력수요 76,000MW, 공급예비율 30.0%</li>
+  <li><strong>수급지표 :</strong> 최대전력수요 17시 발생, 최대전력수요 77,760MW, 공급예비율 33.2%</li>
   <li>
-    <strong>가격지표 :</strong> 가중평균 SMP 113.68원/kWh(전일대비 +17.99원), 피크구간 17~23시<br>
+    <strong>가격지표 :</strong> 가중평균 SMP 123.17원/kWh(전일대비 +27.48원), 피크구간 16~20시<br>
     <span class="pl-4 text-slate-600 block mt-1">- 당월 적용 LNG 단가: 1,058.34원/Nm³(전월비 +88.73원), 전월 평균 SMP: 147.88원/kWh</span>
   </li>
   <li><strong>전원구성 :</strong> 기저발전(원자력·석탄) 안정적 발전 지속, 주간 태양광 출력 집중으로 순부하 최저 형성 후 저녁 피크 시 LNG 및 양수·ESS 가동 대응</li>
@@ -122,45 +100,45 @@
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">가중평균 SMP</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-900">113.68</span><span class="text-xs font-medium pb-1">원</span>
+            <span class="text-2xl font-black text-slate-900">123.17</span><span class="text-xs font-medium pb-1">원</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 text-rose-600">전일비 +17.99원</p>
+          <p class="text-[11px] font-semibold mt-1 text-rose-600">전일비 +27.48원</p>
         </div>
 
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-rose-50/30">
           <p class="text-xs font-bold text-slate-500 mb-1">최고 SMP</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-[#d93f3c]">130.69</span><span class="text-xs font-medium pb-1">원</span>
+            <span class="text-2xl font-black text-[#d93f3c]">185.20</span><span class="text-xs font-medium pb-1">원</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 text-rose-600">전일비 +14.44원</p>
+          <p class="text-[11px] font-semibold mt-1 text-rose-600">전일비 +68.95원</p>
         </div>
 
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">최저 SMP</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-900">97.45</span><span class="text-xs font-medium pb-1">원</span>
+            <span class="text-2xl font-black text-slate-900">97.90</span><span class="text-xs font-medium pb-1">원</span>
           </div>
-          <p class="text-[11px] font-semibold mt-1 text-rose-600">전일비 +97.45원</p>
+          <p class="text-[11px] font-semibold mt-1 text-rose-600">전일비 +97.90원</p>
         </div>
 
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">최대전력 (피크)</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-900">76,000</span><span class="text-xs font-medium pb-1">MW</span>
+            <span class="text-2xl font-black text-slate-900">77,760</span><span class="text-xs font-medium pb-1">MW</span>
           </div>
         </div>
 
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">피크 발생시간</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-slate-900">19:00</span>
+            <span class="text-2xl font-black text-slate-900">17시</span>
           </div>
         </div>
 
         <div class="p-4 flex flex-col justify-center">
           <p class="text-xs font-bold text-slate-500 mb-1">공급예비율</p>
           <div class="flex items-end gap-1">
-            <span class="text-2xl font-black text-emerald-600">30.0</span><span class="text-xs font-medium pb-1">%</span>
+            <span class="text-2xl font-black text-emerald-600">33.2</span><span class="text-xs font-medium pb-1">%</span>
           </div>
         </div>
       </div>
@@ -186,46 +164,46 @@
             </tr>
           </thead>
           <tbody>
-    <tr class="bg-slate-50 font-bold">
-        <td class="">9.28(월)</td>
-        <td>113.68</td><td>130.69</td><td>97.45</td>
-        <td>0</td><td>0</td><td>-</td><td>0.0%</td>
-    </tr>
-    
-    <tr class="">
+<tr class="bg-slate-50 font-bold">
+    <td class="">9.28(월)</td>
+    <td>123.17</td><td>185.20</td><td>97.90</td>
+    <td>100,000</td><td>77,760</td><td>17시</td><td>33.2%</td>
+</tr>
+
+    <tr>
         <td class="text-holiday">9.27(일)</td>
         <td>95.69</td><td>116.25</td><td>0.00</td>
-        <td>90,325</td><td>61,655</td><td>19:00</td><td>46.5%</td>
+        <td>91,000</td><td>61,655</td><td>19시</td><td>46.5%</td>
     </tr>
     
-    <tr class="">
+    <tr>
         <td class="text-holiday">9.26(토)</td>
-        <td>98.52</td><td>111.93</td><td>7.14</td>
-        <td>91,021</td><td>58,288</td><td>20:00</td><td>56.2%</td>
+        <td>105.40</td><td>125.80</td><td>85.00</td>
+        <td>93,000</td><td>62,000</td><td>19시</td><td>45.1%</td>
     </tr>
     
-    <tr class="">
-        <td class="text-holiday">9.25(금)</td>
-        <td>94.20</td><td>111.43</td><td>0.00</td>
-        <td>92,146</td><td>55,706</td><td>20:00</td><td>65.4%</td>
+    <tr>
+        <td class="">9.25(금)</td>
+        <td>110.80</td><td>135.50</td><td>90.10</td>
+        <td>97,000</td><td>69,000</td><td>18시</td><td>36.2%</td>
     </tr>
     
-    <tr class="">
-        <td class="text-holiday">9.24(목)</td>
-        <td>101.99</td><td>111.43</td><td>91.19</td>
-        <td>91,126</td><td>59,601</td><td>19:00</td><td>52.9%</td>
+    <tr>
+        <td class="">9.24(목)</td>
+        <td>115.50</td><td>140.10</td><td>92.50</td>
+        <td>96,000</td><td>68,000</td><td>20시</td><td>35.1%</td>
     </tr>
     
-    <tr class="">
+    <tr>
         <td class="">9.23(수)</td>
-        <td>102.30</td><td>103.45</td><td>96.63</td>
-        <td>100,818</td><td>70,394</td><td>19:00</td><td>43.2%</td>
+        <td>120.10</td><td>150.22</td><td>95.00</td>
+        <td>95,000</td><td>70,000</td><td>19시</td><td>32.5%</td>
     </tr>
     
-    <tr class="">
+    <tr>
         <td class="">9.22(화)</td>
-        <td>108.12</td><td>127.00</td><td>92.08</td>
-        <td>98,074</td><td>76,585</td><td>19:00</td><td>28.1%</td>
+        <td>126.08</td><td>183.83</td><td>97.45</td>
+        <td>98,874</td><td>76,817</td><td>19시</td><td>28.7%</td>
     </tr>
     </tbody>
         </table>
@@ -283,9 +261,7 @@
     });
 
     Chart.register(window['chartjs-plugin-annotation']);
-    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {
-      return eventPosition ? { x: eventPosition.x, y: eventPosition.y } : false;
-    };
+    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) { return eventPosition ? { x: eventPosition.x, y: eventPosition.y } : false; };
     const crosshairPlugin = {
       id: 'crosshair',
       afterDraw: chart => {
@@ -315,116 +291,95 @@
       plugins: {
         legend: { 
           labels: { 
-            usePointStyle: true, 
-            font: { family: 'Noto Sans KR', size: 12 },
+            usePointStyle: true, font: { family: 'Noto Sans KR', size: 12 },
             generateLabels: function(chart) {
               const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
               original.forEach(label => {
                 const ds = chart.data.datasets[label.datasetIndex];
-                if (ds && ds.borderDash) {
-                  label.lineDash = ds.borderDash;
-                }
+                if (ds && ds.borderDash) label.lineDash = ds.borderDash;
               });
               return original;
             }
           } 
         },
         tooltip: {
-          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1,
-          padding: 10, boxPadding: 4, usePointStyle: true,
-          titleFont: { family: 'Noto Sans KR', size: 13, weight: 'bold' },
-          bodyFont: { family: 'Noto Sans KR', size: 12 }
+          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true, titleFont: { family: 'Noto Sans KR', size: 13, weight: 'bold' }, bodyFont: { family: 'Noto Sans KR', size: 12 }
         }
       },
-      scales: { 
-        x: { grid: { display: false } }, 
-        y: { grid: { color: '#f1f5f9' }, grace: '20%' } 
-      }
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, grace: '20%' } }
     };
 
     const dynamicPeakAnnotation = {
-      type: 'box', xMin: 16, xMax: 22,
-      backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
-      label: { display: true, content: '17~23시 피크', position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} }
+      type: 'box', xMin: 15, xMax: 19, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
+      label: { display: true, content: '16~20시 피크', position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} }
     };
 
-    // 02. SMP 차트
     new Chart(document.getElementById('smpChart'), {
       type: 'line',
       data: {
         labels: labels,
-        datasets: [{
-          label: '시간대별 SMP (원/kWh)', data: [100.28, 97.45, 97.45, 97.45, 97.45, 97.45, 102.4, 107.07, 107.28, 107.24, 106.86, 107.23, 106.49, 107.23, 108.3, 112.47, 130.69, 130.69, 130.69, 130.69, 130.69, 130.69, 127.91, 115.49], pointStyle: 'line',
-          borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1
-        }]
+        datasets: [{ label: '시간대별 SMP (원/kWh)', data: [102.3, 98.1, 98.0, 97.9, 101.0, 102.5, 106.8, 110.2, 105.3, 104.2, 104.1, 104.0, 105.8, 109.2, 111.5, 178.5, 185.2, 184.8, 184.5, 184.0, 131.2, 128.0, 112.8, 106.1], pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1 }]
       },
       options: {
         ...commonOptions,
-        scales: {
-          x: { grid: { display: false } },
-          y: { grid: { color: '#f1f5f9' }, title: { display: true, text: '원/kWh' }, grace: '20%' }
-        },
+        scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, title: { display: true, text: '원/kWh' }, grace: '20%' } },
         plugins: {
           ...commonOptions.plugins,
           annotation: {
             annotations: {
               peakBox: dynamicPeakAnnotation,
-              maxPt: { type: 'point', xValue: 16, yValue: 130.69, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' },
-              maxLbl: { type: 'label', xValue: 16, yValue: 130.69, content: ['최고 ' + Number(130.69).toFixed(2) + '원'], font: { size: 11, weight: 'bold' }, color: '#d93f3c', yAdjust: -15 },
-              minPt: { type: 'point', xValue: 1, yValue: 97.45, backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' },
-              minLbl: { type: 'label', xValue: 1, yValue: 97.45, content: ['최저 ' + Number(97.45).toFixed(2) + '원'], font: { size: 11, weight: 'bold' }, color: '#005587', yAdjust: -15 }
+              maxPt: { type: 'point', xValue: 16, yValue: 185.2, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' },
+              maxLbl: { type: 'label', xValue: 16, yValue: 185.2, content: ['최고 ' + Number(185.2).toFixed(2) + '원'], font: { size: 11, weight: 'bold' }, color: '#d93f3c', yAdjust: -15 },
+              minPt: { type: 'point', xValue: 3, yValue: 97.9, backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' },
+              minLbl: { type: 'label', xValue: 3, yValue: 97.9, content: ['최저 ' + Number(97.9).toFixed(2) + '원'], font: { size: 11, weight: 'bold' }, color: '#005587', yAdjust: -15 }
             }
           }
         }
       }
     });
 
-    // 04. 발전원별 구성 차트
     new Chart(document.getElementById('generationChart'), {
       type: 'line',
       data: {
         labels: labels,
         datasets: [
-          { type: 'line', label: '순부하 (태양광/풍력 제외)', data: [46489.4, 44458.6, 43490.2, 43305.8, 43502.0, 44033.0, 43880.7, 43561.4, 42324.5, 40650.5, 39734.8, 39332.3, 40055.6, 42394.6, 44853.7, 48127.8, 51179.2, 55155.3, 58366.1, 58520.7, 57120.9, 54914.5, 52810.1, 50518.6], pointStyle: 'line', borderColor: '#1a1a1a', borderDash: [4,4], borderWidth: 2, pointRadius: 0, fill: false, z: 10, stack: 'netload_stack' },
-          { label: '원자력', data: [20720.0, 20735.3, 20723.0, 20723.0, 20719.4, 20737.4, 20720.6, 20723.9, 20722.5, 20722.5, 20724.1, 20731.4, 20721.4, 20725.9, 20729.5, 20723.0, 20721.6, 20715.6, 20711.5, 20709.2, 20720.4, 20726.4, 20731.8, 20729.0], backgroundColor: '#f59e0b', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: '석탄', data: [16444.2, 14802.2, 13775.6, 13817.2, 13608.8, 13120.4, 12520.3, 12029.7, 10471.2, 8814.5, 7879.6, 7753.8, 7924.9, 8531.9, 10193.9, 12628.9, 15628.6, 17526.6, 19018.5, 20137.4, 20740.4, 20816.0, 20370.2, 19979.2], backgroundColor: '#b45309', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: '유류', data: [157.8, 157.2, 157.1, 157.1, 157.0, 157.0, 157.1, 157.1, 157.1, 157.1, 166.0, 157.4, 157.2, 157.3, 157.2, 157.3, 157.2, 157.2, 157.2, 157.2, 157.2, 157.2, 157.1, 157.1], backgroundColor: '#475569', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: 'LNG', data: [9133.8, 8730.3, 8791.1, 8564.1, 8972.3, 9973.8, 10438.4, 10606.8, 10494.5, 10444.6, 10463.4, 10311.4, 11151.4, 12881.5, 13516.5, 14339.7, 14249.9, 14761.3, 15344.2, 15189.3, 13665.2, 12450.1, 11400.5, 9601.4], backgroundColor: '#fde047', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: '수력', data: [33.6, 33.6, 43.5, 44.4, 44.5, 44.3, 44.3, 43.9, 479.2, 511.7, 501.6, 378.4, 100.6, 98.0, 256.6, 278.9, 357.5, 343.5, 333.5, 346.1, 271.3, 59.5, 52.3, 51.9], backgroundColor: '#38bdf8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: '양수발전', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1122.7, 2128.0, 1500.5, 1257.8, 543.6, 80.7, 0.0], backgroundColor: '#0284c7', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: 'ESS방전', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 64.5, 528.5, 673.0, 480.9, 308.6, 161.6, 17.4, 0.0], backgroundColor: '#1d4ed8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: '풍력', data: [100.8, 66.5, 32.5, 36.2, 37.8, 38.4, 46.5, 62.7, 59.6, 49.7, 49.5, 46.5, 40.4, 43.1, 42.6, 36.7, 28.0, 46.2, 103.1, 152.0, 220.3, 347.6, 317.9, 309.5], backgroundColor: '#22c55e', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: '태양광', data: [0.0, 0.0, 0.0, 0.0, 28.0, 28.1, 34.5, 383.8, 1419.2, 2565.9, 3709.9, 4529.0, 4795.0, 4297.6, 3539.3, 2770.9, 1694.0, 680.8, 55.3, 2.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#ef4444', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: '양수펌핑(충전)', data: [0.0, 0.0, -469.0, -1181.8, -1513.3, -1368.3, -350.5, 0.0, -369.0, -687.4, -687.5, -944.4, -579.3, -63.2, -230.6, -924.1, -151.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#94a3b8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
-          { label: 'ESS충전', data: [-11.1, -9.7, -0.1, -1.4, -9.0, -11.3, -15.6, -15.8, -44.9, -89.1, -351.4, -569.5, -633.3, -463.4, -295.8, -139.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -23.7], backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }
+          { type: 'line', label: '순부하 (태양광/풍력 제외)', data: [55760, 54340, 52610, 52610, 53310, 55860, 58710, 60460, 58510, 56360, 54940, 56360, 59410, 63810, 67910, 73710, 76910, 74760, 70460, 66160, 63010, 60460, 58410, 56860], pointStyle: 'line', borderColor: '#1a1a1a', borderDash: [4,4], borderWidth: 2, pointRadius: 0, fill: false, z: 10, stack: 'netload_stack' },
+          { label: '원자력', data: [20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700, 20700], backgroundColor: '#f59e0b', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '석탄', data: [22900, 22500, 21800, 21500, 21500, 22000, 22800, 23500, 23100, 22500, 22100, 22500, 23500, 24800, 26000, 27500, 28100, 27500, 26500, 25500, 25000, 24500, 24000, 23500], backgroundColor: '#b45309', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '유류', data: [160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160], backgroundColor: '#475569', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: 'LNG', data: [11500, 10500, 9500, 9800, 10500, 12500, 14500, 15500, 14000, 12500, 11500, 12500, 14500, 17500, 19500, 22500, 24500, 23500, 21000, 18500, 16500, 14500, 13000, 12000], backgroundColor: '#fde047', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '수력', data: [500, 480, 450, 450, 450, 500, 550, 600, 550, 500, 480, 500, 550, 650, 750, 850, 950, 900, 800, 700, 650, 600, 550, 500], backgroundColor: '#38bdf8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '양수발전', data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 500, 1200, 1500, 1200, 800, 400, 0, 0, 0, 0], backgroundColor: '#0284c7', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: 'ESS방전', data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 300, 800, 1000, 800, 500, 200, 0, 0, 0, 0], backgroundColor: '#1d4ed8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '풍력', data: [380, 350, 320, 310, 300, 310, 320, 350, 380, 390, 400, 380, 360, 350, 340, 330, 350, 380, 400, 390, 380, 370, 360, 350], backgroundColor: '#22c55e', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '태양광', data: [0, 0, 0, 0, 0, 800, 2500, 5500, 8500, 10500, 11500, 11000, 9500, 7500, 5000, 2500, 500, 0, 0, 0, 0, 0, 0, 0], backgroundColor: '#ef4444', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: '양수펌핑(충전)', data: [-1000, -1200, -1500, -1500, -1200, -800, 0, 0, -800, -1500, -1500, -800, 0, 0, 0, 0, 0, 0, 0, 0, -500, -800, -800, -1000], backgroundColor: '#94a3b8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' },
+          { label: 'ESS충전', data: [-200, -300, -400, -400, -300, -200, 0, 0, -500, -800, -1000, -500, 0, 0, 0, 0, 0, 0, 0, 0, -100, -200, -200, -200], backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }
         ]
       },
       options: { ...commonOptions, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grace: '10%' } } }
     });
 
-    // 05. 주요 발전원 라인 차트
     new Chart(document.getElementById('sourceLineChart'), {
       type: 'line',
       data: {
         labels: labels,
         datasets: [
-          { label: 'LNG', data: [9133.8, 8730.3, 8791.1, 8564.1, 8972.3, 9973.8, 10438.4, 10606.8, 10494.5, 10444.6, 10463.4, 10311.4, 11151.4, 12881.5, 13516.5, 14339.7, 14249.9, 14761.3, 15344.2, 15189.3, 13665.2, 12450.1, 11400.5, 9601.4], pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
-          { label: '석탄', data: [16444.2, 14802.2, 13775.6, 13817.2, 13608.8, 13120.4, 12520.3, 12029.7, 10471.2, 8814.5, 7879.6, 7753.8, 7924.9, 8531.9, 10193.9, 12628.9, 15628.6, 17526.6, 19018.5, 20137.4, 20740.4, 20816.0, 20370.2, 19979.2], pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
-          { label: '신재생(태양광)', data: [0.0, 0.0, 0.0, 0.0, 28.0, 28.1, 34.5, 383.8, 1419.2, 2565.9, 3709.9, 4529.0, 4795.0, 4297.6, 3539.3, 2770.9, 1694.0, 680.8, 55.3, 2.0, 0.0, 0.0, 0.0, 0.0], pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+          { label: 'LNG', data: [11500, 10500, 9500, 9800, 10500, 12500, 14500, 15500, 14000, 12500, 11500, 12500, 14500, 17500, 19500, 22500, 24500, 23500, 21000, 18500, 16500, 14500, 13000, 12000], pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+          { label: '석탄', data: [22900, 22500, 21800, 21500, 21500, 22000, 22800, 23500, 23100, 22500, 22100, 22500, 23500, 24800, 26000, 27500, 28100, 27500, 26500, 25500, 25000, 24500, 24000, 23500], pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+          { label: '신재생(태양광)', data: [0, 0, 0, 0, 0, 800, 2500, 5500, 8500, 10500, 11500, 11000, 9500, 7500, 5000, 2500, 500, 0, 0, 0, 0, 0, 0, 0], pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
         ]
       },
       options: { ...commonOptions, plugins: { ...commonOptions.plugins, annotation: { annotations: { box1: dynamicPeakAnnotation } } } }
     });
 
-    // 06. SMP 스프레드 차트
     new Chart(document.getElementById('spreadChart'), {
       type: 'line',
       data: {
         labels: labels,
         datasets: [
-          { type: 'line', label: '유연성 자원 순공급 (양수/ESS)', yAxisID: 'y', data: [-11.1, -9.7, -469.1, -1183.1, -1522.3, -1379.6, -366.1, -15.8, -413.9, -776.5, -1038.9, -1513.9, -1212.5, -526.7, -526.4, -1063.5, -87.0, 1651.1, 2801.1, 1981.4, 1566.4, 705.2, 98.1, -23.7], pointStyle: 'line', borderColor: '#059669', borderWidth: 2.5, tension: 0.3 },
-          { type: 'line', label: '계통한계가격(SMP)', yAxisID: 'y1', data: [100.28, 97.45, 97.45, 97.45, 97.45, 97.45, 102.4, 107.07, 107.28, 107.24, 106.86, 107.23, 106.49, 107.23, 108.3, 112.47, 130.69, 130.69, 130.69, 130.69, 130.69, 130.69, 127.91, 115.49], pointStyle: 'line', borderColor: '#005587', borderDash: [4,4], borderWidth: 1.5, tension: 0.3 }
+          { type: 'line', label: '유연성 자원 순공급 (양수/ESS)', yAxisID: 'y', data: [-1200, -1500, -1900, -1900, -1500, -1000, 0, 0, -1300, -2300, -2500, -1300, 0, 0, 800, 2000, 2500, 2000, 1300, 600, -600, -1000, -1000, -1200], pointStyle: 'line', borderColor: '#059669', borderWidth: 2.5, tension: 0.3 },
+          { type: 'line', label: '계통한계가격(SMP)', yAxisID: 'y1', data: [102.3, 98.1, 98.0, 97.9, 101.0, 102.5, 106.8, 110.2, 105.3, 104.2, 104.1, 104.0, 105.8, 109.2, 111.5, 178.5, 185.2, 184.8, 184.5, 184.0, 131.2, 128.0, 112.8, 106.1], pointStyle: 'line', borderColor: '#005587', borderDash: [4,4], borderWidth: 1.5, tension: 0.3 }
         ]
       },
       options: {
@@ -438,10 +393,10 @@
           ...commonOptions.plugins,
           annotation: {
             annotations: {
-              spreadMaxPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 16, yValue: 130.69, backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
-              spreadMaxLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 16, yValue: 130.69, content: ['최고 ' + Number(130.69).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#d93c39', yAdjust: -14 },
-              spreadMinPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 1, yValue: 97.45, backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
-              spreadMinLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 1, yValue: 97.45, content: ['최저 ' + Number(97.45).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#005587', yAdjust: -14 }
+              spreadMaxPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 16, yValue: 185.2, backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
+              spreadMaxLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 16, yValue: 185.2, content: ['최고 ' + Number(185.2).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#d93c39', yAdjust: -14 },
+              spreadMinPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 3, yValue: 97.9, backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
+              spreadMinLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 3, yValue: 97.9, content: ['최저 ' + Number(97.9).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#005587', yAdjust: -14 }
             }
           }
         }
