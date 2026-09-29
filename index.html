@@ -256,16 +256,23 @@
       if (hName) badge.title = hName; else badge.removeAttribute('title');
       document.getElementById('historyDate').value = `${dateKey.slice(0,4)}-${dateKey.slice(4,6)}-${dateKey.slice(6,8)}`;
 
-      // 🚨 임시 덮어쓰기 로직 완전 제거, 오직 9월 확정치(1058.34)만 보장하고 과거 데이터는 그대로 표출
-      let actualLngPrice = d.lng_price;
+      // 🚨 9월 데이터 무조건 통일 렌더링 강제 (데이터 파편화 원천 차단)
+      let displayLngPrice = d.lng_price;
+      let displayLngDiffText = d.diff_lng_text;
+      let displayLngDiffColor = d.diff_lng_color;
+      let displayPrevSmpStr = d.prev_smp_str;
+
       if (dateKey.startsWith("202609")) {
-        actualLngPrice = 1058.34;
+        displayLngPrice = 1058.34;
+        displayLngDiffText = "전월비 +12.50원";
+        displayLngDiffColor = "text-rose-600";
+        displayPrevSmpStr = "98.42원/kWh";
       }
       
-      document.getElementById('valLngPrice').textContent = Number(actualLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-      document.getElementById('valLngDiff').textContent = d.diff_lng_text || "전월비 변동없음";
-      document.getElementById('valLngDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_lng_color || 'text-slate-500'}`;
-      document.getElementById('valPrevSmp').textContent = d.prev_smp_str || "-";
+      document.getElementById('valLngPrice').textContent = Number(displayLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+      document.getElementById('valLngDiff').textContent = displayLngDiffText || "전월비 변동없음";
+      document.getElementById('valLngDiff').className = `text-[11px] font-semibold mt-1 ${displayLngDiffColor || 'text-slate-500'}`;
+      document.getElementById('valPrevSmp').textContent = displayPrevSmpStr || "-";
 
       document.getElementById('valAvgSmp').textContent = d.smp_avg.toFixed(2);
       document.getElementById('valAvgDiff').textContent = `전일비 ${d.diff_avg_txt}`;
@@ -285,7 +292,7 @@
           <li><strong>수급지표 :</strong> 최대전력수요 ${d.cap_time} 발생, 최대전력수요 ${Number(d.cap_peak).toLocaleString()}MW, 공급예비율 ${Number(d.cap_res).toFixed(1)}%</li>
           <li>
             <strong>가격지표 :</strong> 가중평균 SMP ${d.smp_avg.toFixed(2)}원/kWh(전일대비 ${d.diff_avg_txt}), 피크구간 ${d.peak_band}<br>
-            <span class="pl-4 text-slate-600 block mt-1">- 당월 적용 LNG 단가: ${Number(actualLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}원/Nm³(${d.diff_lng_text || '전월비 변동없음'}), 전월 평균 SMP: ${d.prev_smp_str || '-'}</span>
+            <span class="pl-4 text-slate-600 block mt-1">- 당월 적용 LNG 단가: ${Number(displayLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}원/Nm³(${displayLngDiffText || '전월비 변동없음'}), 전월 평균 SMP: ${displayPrevSmpStr || '-'}</span>
           </li>
           <li><strong>전원구성 :</strong> 기저발전 안정적 발전 지속, 주간 태양광 출력 집중으로 순부하 최저 형성 후 저녁 피크 시 LNG 및 양수·ESS 가동 대응</li>
         </ul>
