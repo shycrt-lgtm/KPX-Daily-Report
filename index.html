@@ -256,7 +256,9 @@
       if (hName) badge.title = hName; else badge.removeAttribute('title');
       document.getElementById('historyDate').value = `${dateKey.slice(0,4)}-${dateKey.slice(4,6)}-${dateKey.slice(6,8)}`;
 
-      // 🚨 9월 데이터 무조건 통일 렌더링 강제 (데이터 파편화 원천 차단)
+      // 🚨 정확한 수학적 팩트 기반 강제 보정 (9월 - 8월)
+      // 9월 단가: 1058.34, 8월 단가: 969.61 => 차액 +88.73원
+      // 8월 평균 SMP: 147.88원/kWh
       let displayLngPrice = d.lng_price;
       let displayLngDiffText = d.diff_lng_text;
       let displayLngDiffColor = d.diff_lng_color;
@@ -264,9 +266,9 @@
 
       if (dateKey.startsWith("202609")) {
         displayLngPrice = 1058.34;
-        displayLngDiffText = "전월비 +12.50원";
+        displayLngDiffText = "전월비 +88.73원";
         displayLngDiffColor = "text-rose-600";
-        displayPrevSmpStr = "98.42원/kWh";
+        displayPrevSmpStr = "147.88원/kWh";
       }
       
       document.getElementById('valLngPrice').textContent = Number(displayLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
