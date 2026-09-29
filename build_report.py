@@ -70,11 +70,10 @@ for gf in sorted(glob.glob("*발전원별 발전량_*.xlsx")):
         gen_dict[d] = {'nuclear': nuc, 'coal': coal, 'oil': oil, 'gas': gas, 'hydro': hydro, 'pump_gen': p_gen, 'pump_load': p_load, 'ess_dis': e_dis, 'ess_chg': e_chg, 'wind': wind, 'solar': solar, 'net_load': net, 'spread': [pump[i]+ess[i] for i in range(24)]}
 
 # =====================================================================
-# 3. 공공데이터 API 실시간 호출 (이중 인코딩 및 400 크래시 완벽 차단)
+# 3. 공공데이터 API 실시간 호출
 # =====================================================================
 def fetch_api_smp(trade_date, key):
     if not key: return None
-    # 🚨 핵심 보완: 이미 %가 포함된 키의 이중 인코딩(Bad Request) 원천 방지
     safe_key = urllib.parse.quote(urllib.parse.unquote(key.strip()))
     url = f"http://apis.data.go.kr/B552115/smpInland/getSmpInlandList?serviceKey={safe_key}&pageNo=1&numOfRows=30&tradeDate={trade_date}&dataType=JSON"
     try:
@@ -86,7 +85,7 @@ def fetch_api_smp(trade_date, key):
             hourly = [float(x.get('smp', 0)) for x in items if int(x.get('tradeHour', 0)) in range(1, 25)]
             return hourly if len(hourly) == 24 else None
     except Exception as e:
-        print(f"SMP API 오류 발생 (무시하고 엑셀 백업 사용): {e}")
+        print(f"SMP API 알림: {e}")
     return None
 
 def fetch_api_gen(trade_date, key):
@@ -118,12 +117,9 @@ def fetch_api_gen(trade_date, key):
                     if cnt[h] > 0: fmap[f][h] = round(fmap[f][h]/cnt[h], 1)
             return fmap
     except Exception as e:
-        print(f"발전원 API 오류 발생 (무시하고 엑셀 백업 사용): {e}")
+        print(f"발전원 API 알림: {e}")
     return None
 
-# =====================================================================
-# 4. 실시간 API 연동 및 데이터 통합
-# =====================================================================
 print(f">> {target_date_str} 실시간 데이터 수집 시도...")
 
 api_smp = fetch_api_smp(target_date_str, DATA_GO_KR_KEY)
@@ -140,13 +136,13 @@ if api_gen:
     gen_dict[target_date_str] = {'nuclear': api_gen['nuclear'], 'coal': api_gen['coal'], 'oil': api_gen['oil'], 'gas': api_gen['gas'], 'hydro': api_gen['hydro'], 'pump_gen': p_gen, 'pump_load': p_load, 'ess_dis': e_dis, 'ess_chg': e_chg, 'wind': api_gen['wind'], 'solar': api_gen['solar'], 'net_load': net, 'spread': spread}
     print(">> 발전원별 실시간 API 수집 성공!")
 
-# API 장애 시, 스크립트가 뻗지 않고 엑셀에 있는 가장 마지막 데이터를 복사하여 에러 방지
+# API 미제공 시 가장 최신 확정 데이터 사용
 if target_date_str not in smp_dict: smp_dict[target_date_str] = smp_dict[sorted(smp_dict.keys())[-1]]
 if target_date_str not in gen_dict: gen_dict[target_date_str] = gen_dict[sorted(gen_dict.keys())[-1]]
 if target_date_str not in cap_dict: cap_dict[target_date_str] = cap_dict[sorted(cap_dict.keys())[-1]]
 
 # =====================================================================
-# 5. 리포트 UI 데이터 연산 및 HTML 렌더링
+# 4. 리포트 데이터 연산
 # =====================================================================
 korean_holidays = {
     '20220101': '신정', '20220131': '설날연휴', '20220201': '설날', '20220202': '설날연휴', '20220301': '삼일절', '20220309': '대통령선거', '20220505': '어린이날', '20220508': '부처님오신날', '20220601': '지방선거', '20220606': '현충일', '20220815': '광복절', '20220909': '추석연휴', '20220910': '추석', '20220911': '추석연휴', '20220912': '대체공휴일', '20221003': '개천절', '20221009': '한글날', '20221010': '대체공휴일', '20221225': '성탄절',
@@ -186,7 +182,6 @@ peak_band_label = f"{left+1}~{right+1}시"
 g_info = gen_dict[target_date_str]
 c_info = cap_dict[target_date_str]
 
-# 엑셀과 API 이력을 모두 뒤져서 최근 7일 내역 구성
 recent_7 = []
 for delta in range(7):
     pd_str = (target_dt - timedelta(days=delta)).strftime("%Y%m%d")
@@ -219,6 +214,9 @@ for i, r in enumerate(recent_7):
     txt = "text-holiday" if r['is_holiday'] else ""
     table_rows_html += f"""<tr class="{bg}"><td class="{txt}">{r['date']}</td><td>{r['avg']:.2f}</td><td>{r['max']:.2f}</td><td>{r['min']:.2f}</td><td>{r['cap']:,}</td><td>{r['peak']:,}</td><td>{r['time']}</td><td>{r['res']}%</td></tr>"""
 
+# =====================================================================
+# 5. HTML 템플릿 (Chart.js 어노테이션 플러그인 등록 완벽 복구)
+# =====================================================================
 html_content = f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -226,8 +224,8 @@ html_content = f"""<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>전력시장 전일실적 요약</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
@@ -364,6 +362,11 @@ html_content = f"""<!DOCTYPE html>
   </div>
 
   <script>
+    // 🚨 핵심 수정: 플러그인 등록
+    if (window['chartjs-plugin-annotation']) {{
+      Chart.register(window['chartjs-plugin-annotation']);
+    }}
+
     const holidayMap = {json.dumps(holiday_map_js, ensure_ascii=False)};
     flatpickr("#historyDate", {{
       locale: "ko", dateFormat: "Y-m-d", defaultDate: "{target_date_dashed}", minDate: "2022-01-01", maxDate: "{target_date_dashed}", disableMobile: true,
@@ -378,7 +381,6 @@ html_content = f"""<!DOCTYPE html>
       }}
     }});
 
-    Chart.register(window['chartjs-plugin-annotation']);
     const labels = {json_hours};
     const commonOptions = {{
       responsive: true, maintainAspectRatio: false,
@@ -386,15 +388,27 @@ html_content = f"""<!DOCTYPE html>
       scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }}, grace: '20%' }} }}
     }};
 
+    // 02. SMP 차트
     new Chart(document.getElementById('smpChart'), {{
-      type: 'line', data: {{ labels: labels, datasets: [{{ label: '시간대별 SMP (원/kWh)', data: {json.dumps(land_smp)}, borderColor: '#005587', borderWidth: 3, pointRadius: 3 }}] }},
-      options: {{ ...commonOptions, plugins: {{ annotation: {{ annotations: {{
-        peakBox: {{ type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0 }},
-        maxLbl: {{ type: 'label', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 {max_smp}원'], color: '#d93f3c', yAdjust: -15 }},
-        minLbl: {{ type: 'label', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 {min_smp}원'], color: '#005587', yAdjust: -15 }}
-      }}}}}}
+      type: 'line',
+      data: {{ labels: labels, datasets: [{{ label: '시간대별 SMP (원/kWh)', data: {json.dumps(land_smp)}, borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3 }}] }},
+      options: {{
+        ...commonOptions,
+        plugins: {{
+          annotation: {{
+            annotations: {{
+              peakBox: {{ type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0 }},
+              maxPt: {{ type: 'point', xValue: {max_smp_idx}, yValue: {max_smp}, backgroundColor: '#d93f3c', radius: 4 }},
+              maxLbl: {{ type: 'label', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], color: '#d93f3c', yAdjust: -15, font: {{ weight: 'bold' }} }},
+              minPt: {{ type: 'point', xValue: {min_smp_idx}, yValue: {min_smp}, backgroundColor: '#005587', radius: 4 }},
+              minLbl: {{ type: 'label', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], color: '#005587', yAdjust: -15, font: {{ weight: 'bold' }} }}
+            }}
+          }}
+        }}
+      }}
     }});
 
+    // 04. 발전원별 구성
     new Chart(document.getElementById('generationChart'), {{
       type: 'line',
       data: {{
@@ -410,6 +424,7 @@ html_content = f"""<!DOCTYPE html>
       options: {{ ...commonOptions, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }} }}
     }});
 
+    // 05. 주요 발전원 (석탄 실선 통일)
     new Chart(document.getElementById('sourceLineChart'), {{
       type: 'line',
       data: {{
@@ -423,6 +438,7 @@ html_content = f"""<!DOCTYPE html>
       options: commonOptions
     }});
 
+    // 06. SMP 스프레드
     new Chart(document.getElementById('spreadChart'), {{
       type: 'line',
       data: {{
@@ -432,19 +448,23 @@ html_content = f"""<!DOCTYPE html>
           {{ label: '계통한계가격(SMP)', yAxisID: 'y1', data: {json.dumps(land_smp)}, borderColor: '#005587', borderDash: [4,4], borderWidth: 1.5 }}
         ]
       }},
-      options: {{ ...commonOptions, scales: {{ y: {{ type: 'linear', position: 'left' }}, y1: {{ type: 'linear', position: 'right', grid: {{ drawOnChartArea: false }} }} }} }}
+      options: {{
+        ...commonOptions,
+        scales: {{
+          y: {{ type: 'linear', position: 'left' }},
+          y1: {{ type: 'linear', position: 'right', grid: {{ drawOnChartArea: false }} }}
+        }}
+      }}
     }});
   </script>
 </body>
 </html>
 """
 
-# =====================================================================
-# 6. 파일 동시 저장 및 index.html 강제 갱신
-# =====================================================================
+# 파일 저장
 daily_filename = f"daily_report_{target_date_str}.html"
 with open(daily_filename, "w", encoding="utf-8") as f:
     f.write(html_content)
 
 shutil.copyfile(daily_filename, "index.html")
-print(f">> 완료: {daily_filename} 생성 및 index.html 배포 완료!")
+print(f">> 완료: {daily_filename} 생성 및 index.html 배포 준비 완료!")
