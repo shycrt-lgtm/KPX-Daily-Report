@@ -69,6 +69,19 @@ for gf in sorted(glob.glob("*발전원별 발전량_*.xlsx")):
         net = [nuc[i]+coal[i]+oil[i]+gas[i]+hydro[i]+p_gen[i]+e_dis[i] for i in range(24)]
         gen_dict[d] = {'nuclear': nuc, 'coal': coal, 'oil': oil, 'gas': gas, 'hydro': hydro, 'pump_gen': p_gen, 'pump_load': p_load, 'ess_dis': e_dis, 'ess_chg': e_chg, 'wind': wind, 'solar': solar, 'net_load': net, 'spread': [pump[i]+ess[i] for i in range(24)]}
 
+# LNG 단가 로딩
+lng_dict = {}
+lng_candidates = glob.glob("*LNG*.xlsx") + [f for f in glob.glob("*.xlsx") if "5." in f]
+if lng_candidates:
+    df_lng = pd.read_excel(lng_candidates[0], sheet_name="입방당", header=None)
+    for r in range(len(df_lng)):
+        row_strs = [str(x).replace(' ', '') for x in df_lng.iloc[r]]
+        if any("합계" in c for c in row_strs):
+            try:
+                m_idx = int(target_date_str[4:6])
+                lng_dict[target_date_str[:6]] = float(df_lng.iloc[r, m_idx])
+            except: pass
+
 # =====================================================================
 # 3. 공공데이터 API 실시간 호출
 # =====================================================================
@@ -136,7 +149,6 @@ if api_gen:
     gen_dict[target_date_str] = {'nuclear': api_gen['nuclear'], 'coal': api_gen['coal'], 'oil': api_gen['oil'], 'gas': api_gen['gas'], 'hydro': api_gen['hydro'], 'pump_gen': p_gen, 'pump_load': p_load, 'ess_dis': e_dis, 'ess_chg': e_chg, 'wind': api_gen['wind'], 'solar': api_gen['solar'], 'net_load': net, 'spread': spread}
     print(">> 발전원별 실시간 API 수집 성공!")
 
-# API 미제공 시 가장 최신 확정 데이터 사용
 if target_date_str not in smp_dict: smp_dict[target_date_str] = smp_dict[sorted(smp_dict.keys())[-1]]
 if target_date_str not in gen_dict: gen_dict[target_date_str] = gen_dict[sorted(gen_dict.keys())[-1]]
 if target_date_str not in cap_dict: cap_dict[target_date_str] = cap_dict[sorted(cap_dict.keys())[-1]]
@@ -215,7 +227,7 @@ for i, r in enumerate(recent_7):
     table_rows_html += f"""<tr class="{bg}"><td class="{txt}">{r['date']}</td><td>{r['avg']:.2f}</td><td>{r['max']:.2f}</td><td>{r['min']:.2f}</td><td>{r['cap']:,}</td><td>{r['peak']:,}</td><td>{r['time']}</td><td>{r['res']}%</td></tr>"""
 
 # =====================================================================
-# 5. HTML 템플릿 (Chart.js 어노테이션 플러그인 등록 완벽 복구)
+# 5. HTML 템플릿
 # =====================================================================
 html_content = f"""<!DOCTYPE html>
 <html lang="ko">
@@ -268,8 +280,8 @@ html_content = f"""<!DOCTYPE html>
           </div>
           <span class="text-xs font-bold px-1.5 py-0.5 rounded border {badge_color_cls}" {badge_title}>({w_kr})</span>
           <div class="ml-2 pl-2 border-l border-slate-200">
-            <a href="index.html" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition">
-              <span>⚡ 최신 실적으로</span> &rarr;
+            <a href="index.html" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition" title="확정된 가장 최근 실적일로 이동">
+              <span>⚡ 최신 실적({target_dt.strftime('%m.%d')})으로</span> &rarr;
             </a>
           </div>
         </div>
@@ -283,7 +295,7 @@ html_content = f"""<!DOCTYPE html>
         <ul class="space-y-2">
           <li><strong>수급지표 :</strong> 최대전력수요 {c_info['time']} 발생, 최대전력수요 {c_info['peak']:,}MW, 공급예비율 {c_info['res']}%</li>
           <li><strong>가격지표 :</strong> 가중평균 SMP {avg_smp:.2f}원/kWh(전일대비 {diff_avg_txt}), 피크구간 {peak_band_label}</li>
-          <li><strong>전원구성 :</strong> 기저발전 안정적 발전 지속, 일몰 후 저녁 피크 시 LNG 및 양수·ESS 가동 대응</li>
+          <li><strong>전원구성 :</strong> 기저발전 안정적 발전 지속, 주간 태양광 출력 집중으로 순부하 최저 형성 후 저녁 피크 시 LNG 및 양수·ESS 가동 대응</li>
         </ul>
       </div>
     </div>
@@ -358,14 +370,40 @@ html_content = f"""<!DOCTYPE html>
     <div>
       <h2>06. SMP 스프레드</h2>
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
+      <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
     </div>
   </div>
 
   <script>
-    // 🚨 핵심 수정: 플러그인 등록
     if (window['chartjs-plugin-annotation']) {{
       Chart.register(window['chartjs-plugin-annotation']);
     }}
+
+    // 마우스 호버(Hover) 위치 추적 툴팁 포지셔너 등록
+    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {{
+      return eventPosition ? {{ x: eventPosition.x, y: eventPosition.y }} : false;
+    }};
+
+    // 마우스 호버 수직 십자 점선(Crosshair) 가이드라인 플러그인 등록
+    const crosshairPlugin = {{
+      id: 'crosshair',
+      afterDraw: chart => {{
+        if (chart.tooltip && chart.tooltip._active && chart.tooltip._active.length) {{
+          const activePoint = chart.tooltip._active[0];
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(activePoint.element.x, chart.chartArea.top);
+          ctx.lineTo(activePoint.element.x, chart.chartArea.bottom);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(100, 116, 139, 0.7)';
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.restore();
+        }}
+      }}
+    }};
+    Chart.register(crosshairPlugin);
 
     const holidayMap = {json.dumps(holiday_map_js, ensure_ascii=False)};
     flatpickr("#historyDate", {{
@@ -382,77 +420,124 @@ html_content = f"""<!DOCTYPE html>
     }});
 
     const labels = {json_hours};
+
+    // 모든 그래프 공통 옵션: 선형 범례(usePointStyle: true) 및 호버 툴팁 복원
     const commonOptions = {{
       responsive: true, maintainAspectRatio: false,
       layout: {{ padding: {{ top: 40, right: 20, bottom: 20, left: 10 }} }},
+      interaction: {{ mode: 'index', intersect: false }},
+      plugins: {{
+        legend: {{ 
+          labels: {{ 
+            usePointStyle: true, 
+            font: {{ family: 'Noto Sans KR', size: 12 }},
+            generateLabels: function(chart) {{
+              const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+              original.forEach(label => {{
+                const ds = chart.data.datasets[label.datasetIndex];
+                if (ds && ds.borderDash) label.lineDash = ds.borderDash;
+              }});
+              return original;
+            }}
+          }} 
+        }},
+        tooltip: {{
+          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1,
+          padding: 10, boxPadding: 4, usePointStyle: true,
+          titleFont: {{ family: 'Noto Sans KR', size: 13, weight: 'bold' }},
+          bodyFont: {{ family: 'Noto Sans KR', size: 12 }}
+        }}
+      }},
       scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }}, grace: '20%' }} }}
     }};
 
     // 02. SMP 차트
     new Chart(document.getElementById('smpChart'), {{
       type: 'line',
-      data: {{ labels: labels, datasets: [{{ label: '시간대별 SMP (원/kWh)', data: {json.dumps(land_smp)}, borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3 }}] }},
+      data: {{ labels: labels, datasets: [{{ label: '시간대별 SMP (원/kWh)', data: {json.dumps(land_smp)}, pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1 }}] }},
       options: {{
         ...commonOptions,
+        scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }}, title: {{ display: true, text: '원/kWh' }}, grace: '20%' }} }},
         plugins: {{
+          ...commonOptions.plugins,
           annotation: {{
             annotations: {{
-              peakBox: {{ type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0 }},
-              maxPt: {{ type: 'point', xValue: {max_smp_idx}, yValue: {max_smp}, backgroundColor: '#d93f3c', radius: 4 }},
-              maxLbl: {{ type: 'label', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], color: '#d93f3c', yAdjust: -15, font: {{ weight: 'bold' }} }},
-              minPt: {{ type: 'point', xValue: {min_smp_idx}, yValue: {min_smp}, backgroundColor: '#005587', radius: 4 }},
-              minLbl: {{ type: 'label', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], color: '#005587', yAdjust: -15, font: {{ weight: 'bold' }} }}
+              peakBox: {{ type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0, label: {{ display: true, content: '{peak_band_label} 피크', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }} }},
+              maxPt: {{ type: 'point', xValue: {max_smp_idx}, yValue: {max_smp}, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' }},
+              maxLbl: {{ type: 'label', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], color: '#d93f3c', yAdjust: -15, font: {{ size: 11, weight: 'bold' }} }},
+              minPt: {{ type: 'point', xValue: {min_smp_idx}, yValue: {min_smp}, backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' }},
+              minLbl: {{ type: 'label', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], color: '#005587', yAdjust: -15, font: {{ size: 11, weight: 'bold' }} }}
             }}
           }}
         }}
       }}
     }});
 
-    // 04. 발전원별 구성
+    // 04. 발전원별 구성 차트
     new Chart(document.getElementById('generationChart'), {{
       type: 'line',
       data: {{
         labels: labels,
         datasets: [
-          {{ label: '순부하', data: {json.dumps(g_info['net_load'])}, borderColor: '#1a1a1a', borderDash: [4,4], fill: false }},
-          {{ label: '원자력', data: {json.dumps(g_info['nuclear'])}, backgroundColor: '#f59e0b', fill: true, stack: 'area' }},
-          {{ label: '석탄', data: {json.dumps(g_info['coal'])}, backgroundColor: '#b45309', fill: true, stack: 'area' }},
-          {{ label: 'LNG', data: {json.dumps(g_info['gas'])}, backgroundColor: '#fde047', fill: true, stack: 'area' }},
-          {{ label: '태양광', data: {json.dumps(g_info['solar'])}, backgroundColor: '#ef4444', fill: true, stack: 'area' }}
+          {{ type: 'line', label: '순부하 (태양광/풍력 제외)', data: {json.dumps(g_info['net_load'])}, pointStyle: 'line', borderColor: '#1a1a1a', borderDash: [4,4], borderWidth: 2, pointRadius: 0, fill: false, z: 10, stack: 'netload_stack' }},
+          {{ label: '원자력', data: {json.dumps(g_info['nuclear'])}, backgroundColor: '#f59e0b', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '석탄', data: {json.dumps(g_info['coal'])}, backgroundColor: '#b45309', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '유류', data: {json.dumps(g_info['oil'])}, backgroundColor: '#475569', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: 'LNG', data: {json.dumps(g_info['gas'])}, backgroundColor: '#fde047', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '수력', data: {json.dumps(g_info['hydro'])}, backgroundColor: '#38bdf8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '양수발전', data: {json.dumps(g_info['pump_gen'])}, backgroundColor: '#0284c7', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: 'ESS방전', data: {json.dumps(g_info['ess_dis'])}, backgroundColor: '#1d4ed8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '풍력', data: {json.dumps(g_info['wind'])}, backgroundColor: '#22c55e', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '태양광', data: {json.dumps(g_info['solar'])}, backgroundColor: '#ef4444', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: '양수펌핑(충전)', data: {json.dumps(g_info['pump_load'])}, backgroundColor: '#94a3b8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }},
+          {{ label: 'ESS충전', data: {json.dumps(g_info['ess_chg'])}, backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }}
         ]
       }},
-      options: {{ ...commonOptions, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }} }}
+      options: {{ ...commonOptions, scales: {{ x: {{ stacked: true, grid: {{ display: false }} }}, y: {{ stacked: true, grace: '10%' }} }} }}
     }});
 
-    // 05. 주요 발전원 (석탄 실선 통일)
+    // 05. 주요 발전원 라인 차트 (석탄 실선 통일, 범례 선 모양)
     new Chart(document.getElementById('sourceLineChart'), {{
       type: 'line',
       data: {{
         labels: labels,
         datasets: [
-          {{ label: 'LNG', data: {json.dumps(g_info['gas'])}, borderColor: '#005587', borderWidth: 2.5 }},
-          {{ label: '석탄', data: {json.dumps(g_info['coal'])}, borderColor: '#d93f3c', borderWidth: 2.5 }},
-          {{ label: '신재생(태양광)', data: {json.dumps(g_info['solar'])}, borderColor: '#f59e0b', borderWidth: 2.5 }}
+          {{ label: 'LNG', data: {json.dumps(g_info['gas'])}, pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }},
+          {{ label: '석탄', data: {json.dumps(g_info['coal'])}, pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }},
+          {{ label: '신재생(태양광)', data: {json.dumps(g_info['solar'])}, pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }}
         ]
       }},
-      options: commonOptions
+      options: {{ ...commonOptions, plugins: {{ ...commonOptions.plugins, annotation: {{ annotations: {{ box1: {{ type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0 }} }} }} }} }}
     }});
 
-    // 06. SMP 스프레드
+    // 06. SMP 스프레드 (최고/최저 SMP 상시 표기 및 점선 범례 적용)
     new Chart(document.getElementById('spreadChart'), {{
       type: 'line',
       data: {{
         labels: labels,
         datasets: [
-          {{ label: '유연성 자원 (양수/ESS)', yAxisID: 'y', data: {json.dumps(g_info['spread'])}, borderColor: '#059669', borderWidth: 2.5 }},
-          {{ label: '계통한계가격(SMP)', yAxisID: 'y1', data: {json.dumps(land_smp)}, borderColor: '#005587', borderDash: [4,4], borderWidth: 1.5 }}
+          {{ type: 'line', label: '유연성 자원 순공급 (양수/ESS)', yAxisID: 'y', data: {json.dumps(g_info['spread'])}, pointStyle: 'line', borderColor: '#059669', borderWidth: 2.5, tension: 0.3 }},
+          {{ type: 'line', label: '계통한계가격(SMP)', yAxisID: 'y1', data: {json.dumps(land_smp)}, pointStyle: 'line', borderColor: '#005587', borderDash: [4,4], borderWidth: 1.5, tension: 0.3 }}
         ]
       }},
       options: {{
         ...commonOptions,
         scales: {{
-          y: {{ type: 'linear', position: 'left' }},
-          y1: {{ type: 'linear', position: 'right', grid: {{ drawOnChartArea: false }} }}
+          x: {{ grid: {{ display: false }} }},
+          y: {{ type: 'linear', display: true, position: 'left', title: {{ display: true, text: 'MW' }}, grace: '15%' }},
+          y1: {{ type: 'linear', display: true, position: 'right', grid: {{ drawOnChartArea: false }}, title: {{ display: true, text: '원/kWh' }}, grace: '20%' }}
+        }},
+        plugins: {{
+          ...commonOptions.plugins,
+          annotation: {{
+            annotations: {{
+              spreadMaxPt: {{ type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: {max_smp_idx}, yValue: {max_smp}, backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' }},
+              spreadMaxLbl: {{ type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], font: {{ size: 10, weight: 'bold' }}, color: '#d93c39', yAdjust: -14 }},
+              spreadMinPt: {{ type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: {min_smp_idx}, yValue: {min_smp}, backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' }},
+              spreadMinLbl: {{ type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], font: {{ size: 10, weight: 'bold' }}, color: '#005587', yAdjust: -14 }}
+            }}
+          }}
         }}
       }}
     }});
@@ -461,10 +546,27 @@ html_content = f"""<!DOCTYPE html>
 </html>
 """
 
-# 파일 저장
+# =====================================================================
+# 6. 최신일 리포트 저장 및 과거 파일의 '최신 버튼' 일괄 동기화
+# =====================================================================
 daily_filename = f"daily_report_{target_date_str}.html"
 with open(daily_filename, "w", encoding="utf-8") as f:
     f.write(html_content)
 
 shutil.copyfile(daily_filename, "index.html")
-print(f">> 완료: {daily_filename} 생성 및 index.html 배포 준비 완료!")
+
+# 과거 HTML 파일들의 '최신 실적으로' 버튼 링크 및 날짜 텍스트를 오늘 기준(D-1)으로 일괄 최신화
+latest_btn_replacement = f'<span>⚡ 최신 실적({target_dt.strftime("%m.%d")})으로</span> &rarr;'
+for old_html in glob.glob("daily_report_*.html"):
+    if old_html == daily_filename: continue
+    try:
+        with open(old_html, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "⚡ 최신 실적" in content:
+            import re
+            content = re.sub(r'<span>⚡ 최신 실적\([0-9.]+\)으로</span> &rarr;', latest_btn_replacement, content)
+            with open(old_html, "w", encoding="utf-8") as f:
+                f.write(content)
+    except: pass
+
+print(f">> 완료: {daily_filename} 생성, index.html 배포 및 과거 파일 최신버튼({target_dt.strftime('%m.%d')}) 동기화 완료!")
