@@ -25,20 +25,26 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install pandas openpyxl google-generativeai
+          pip install pandas openpyxl
 
-      - name: Run Daily Report Generator
+      - name: Generate Master data.json (First Run or API update)
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: |
-          python build_report.py
+          # data.json이 없으면 엑셀 기반으로 2022~현재 전체 생성, 있으면 일일 업데이트 실행
+          if [ ! -f "data.json" ]; then
+            python backfill_generator.py
+          else
+            python build_report.py
+          fi
 
-      - name: Commit and Push Updated Report
+      - name: Cleanup Old HTMLs and Commit SPA
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html daily_report_*.html
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto: Update daily report [$(date +'%Y-%m-%d')]"
+          # 불필요한 과거 1,700여 개 개별 HTML 일괄 삭제
+          git rm -f daily_report_*.html 2>/dev/null || true
+          git add index.html data.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto: Update SPA data.json [$(date +'%Y-%m-%d')]"
           git pull --rebase origin main
           git push origin main
