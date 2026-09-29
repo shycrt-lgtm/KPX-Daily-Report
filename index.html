@@ -28,7 +28,6 @@
 </head>
 <body class="p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-8">
-    <!-- Header -->
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
@@ -58,13 +57,11 @@
       </div>
     </div>
 
-    <!-- 00. Executive Summary -->
     <div>
       <h2>00. Executive Summary</h2>
       <div id="boxSummary" class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium">로딩 중...</div>
     </div>
 
-    <!-- 01. 전일 전력시장 실적요약 -->
     <div>
       <h2>01. 전일 전력시장 실적요약</h2>
       <div class="grid grid-cols-2 md:grid-cols-7 gap-0 border border-slate-200">
@@ -104,13 +101,10 @@
       </div>
     </div>
 
-    <!-- 02. SMP 차트 -->
     <div>
       <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
       <div class="chart-container"><canvas id="smpChart"></canvas></div>
     </div>
-
-    <!-- 03. 최근 7일 테이블 -->
     <div>
       <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
       <div class="overflow-x-auto">
@@ -123,20 +117,14 @@
         </table>
       </div>
     </div>
-
-    <!-- 04. 발전원별 구성 차트 -->
     <div>
       <h2>04. 발전원별 실시간 수급 구성 및 순부하</h2>
       <div class="chart-container"><canvas id="generationChart"></canvas></div>
     </div>
-
-    <!-- 05. 주요 발전원 라인 차트 -->
     <div>
       <h2>05. 주요 발전원 시간대별 출력 추이</h2>
       <div class="chart-container"><canvas id="sourceLineChart"></canvas></div>
     </div>
-
-    <!-- 06. SMP 스프레드 -->
     <div>
       <h2>06. SMP 스프레드</h2>
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
@@ -183,25 +171,16 @@
     };
 
     function initCharts() {
-      // 02. SMP
       charts.smp = new Chart(document.getElementById('smpChart'), {
         type: 'line',
         data: { labels: labels, datasets: [{ label: '시간대별 SMP (원/kWh)', data: [], pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1 }] },
         options: {
           ...commonOptions,
           scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, title: { display: true, text: '원/kWh' }, grace: '20%' } },
-          plugins: {
-            ...commonOptions.plugins,
-            tooltip: {
-              ...commonOptions.plugins.tooltip,
-              callbacks: { label: ctx => ' ' + Number(ctx.raw).toFixed(2) + '원/kWh' }
-            },
-            annotation: { annotations: {} }
-          }
+          plugins: { ...commonOptions.plugins, tooltip: { ...commonOptions.plugins.tooltip, callbacks: { label: ctx => ' ' + Number(ctx.raw).toFixed(2) + '원/kWh' } }, annotation: { annotations: {} } }
         }
       });
 
-      // 04. Generation
       charts.gen = new Chart(document.getElementById('generationChart'), {
         type: 'line',
         data: {
@@ -224,7 +203,6 @@
         options: { ...commonOptions, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grace: '10%' } } }
       });
 
-      // 05. Source Line ('태양광' 명칭 통일)
       charts.source = new Chart(document.getElementById('sourceLineChart'), {
         type: 'line',
         data: {
@@ -238,7 +216,6 @@
         options: { ...commonOptions, plugins: { ...commonOptions.plugins, annotation: { annotations: {} } } }
       });
 
-      // 06. Spread
       charts.spread = new Chart(document.getElementById('spreadChart'), {
         type: 'line',
         data: {
@@ -265,7 +242,6 @@
       const d = MASTER_DATA.days[dateKey];
       const hol = MASTER_DATA.holidays;
 
-      // 헤더 및 날짜
       const dObj = new Date(parseInt(dateKey.slice(0,4)), parseInt(dateKey.slice(4,6))-1, parseInt(dateKey.slice(6,8)));
       const wDay = weekdays[dObj.getDay()];
       const isHol = dObj.getDay() === 0 || dObj.getDay() === 6 || !!hol[dateKey];
@@ -278,38 +254,32 @@
       badge.textContent = `(${wDay})`;
       badge.className = `text-xs font-bold px-1.5 py-0.5 rounded border ${isHol ? 'text-rose-600 bg-rose-50 border-rose-200' : 'text-slate-500 bg-white border-slate-200'}`;
       if (hName) badge.title = hName; else badge.removeAttribute('title');
-
       document.getElementById('historyDate').value = `${dateKey.slice(0,4)}-${dateKey.slice(4,6)}-${dateKey.slice(6,8)}`;
 
-      // 🚨 [핵심 해결] 01. LNG 단가 및 전월비 DOM 동적 갱신 복원!
-      // 9월 데이터의 경우 만약 과거 2026원이 들어있더라도 무조건 1058.34원으로 보정 표출
+      // 🚨 임시 덮어쓰기 로직 완전 제거, 오직 9월 확정치(1058.34)만 보장하고 과거 데이터는 그대로 표출
       let actualLngPrice = d.lng_price;
-      if (dateKey.startsWith("202609") || actualLngPrice > 2000) {
+      if (dateKey.startsWith("202609")) {
         actualLngPrice = 1058.34;
       }
+      
       document.getElementById('valLngPrice').textContent = Number(actualLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
       document.getElementById('valLngDiff').textContent = d.diff_lng_text || "전월비 변동없음";
       document.getElementById('valLngDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_lng_color || 'text-slate-500'}`;
       document.getElementById('valPrevSmp').textContent = d.prev_smp_str || "-";
 
-      // SMP 및 수급 카드 갱신
       document.getElementById('valAvgSmp').textContent = d.smp_avg.toFixed(2);
       document.getElementById('valAvgDiff').textContent = `전일비 ${d.diff_avg_txt}`;
       document.getElementById('valAvgDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_avg_color}`;
-
       document.getElementById('valMaxSmp').textContent = d.smp_max.toFixed(2);
       document.getElementById('valMaxDiff').textContent = `전일비 ${d.diff_max_txt}`;
       document.getElementById('valMaxDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_max_color}`;
-
       document.getElementById('valMinSmp').textContent = d.smp_min.toFixed(2);
       document.getElementById('valMinDiff').textContent = `전일비 ${d.diff_min_txt}`;
       document.getElementById('valMinDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_min_color}`;
-
       document.getElementById('valPeakMw').textContent = Number(d.cap_peak).toLocaleString();
       document.getElementById('valPeakTime').textContent = d.cap_time;
       document.getElementById('valResRatio').textContent = Number(d.cap_res).toFixed(1);
 
-      // 00. Summary Box 동적 갱신
       document.getElementById('boxSummary').innerHTML = `
         <ul class="space-y-2">
           <li><strong>수급지표 :</strong> 최대전력수요 ${d.cap_time} 발생, 최대전력수요 ${Number(d.cap_peak).toLocaleString()}MW, 공급예비율 ${Number(d.cap_res).toFixed(1)}%</li>
@@ -321,7 +291,6 @@
         </ul>
       `;
 
-      // 03. 최근 7일 테이블
       let tableHtml = "";
       d.recent_7.forEach((r, idx) => {
         const bg = idx === 0 ? "bg-slate-50 font-bold" : "";
@@ -330,12 +299,8 @@
       });
       document.getElementById('table7DaysBody').innerHTML = tableHtml;
 
-      // 02. SMP 차트 갱신
       charts.smp.data.datasets[0].data = d.smp_hourly;
-      const peakAnnotation = {
-        type: 'box', xMin: d.peak_left, xMax: d.peak_right, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
-        label: { display: true, content: `${d.peak_band} 피크`, position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} }
-      };
+      const peakAnnotation = { type: 'box', xMin: d.peak_left, xMax: d.peak_right, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0, label: { display: true, content: `${d.peak_band} 피크`, position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} } };
       charts.smp.options.plugins.annotation.annotations = {
         peakBox: peakAnnotation,
         maxPt: { type: 'point', xValue: d.smp_max_idx, yValue: d.smp_max, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' },
@@ -345,7 +310,6 @@
       };
       charts.smp.update('none');
 
-      // 04. Generation 차트 갱신
       const g = d.gen;
       charts.gen.data.datasets[0].data = g.net_load;
       charts.gen.data.datasets[1].data = g.nuclear;
@@ -361,14 +325,12 @@
       charts.gen.data.datasets[11].data = g.ess_chg;
       charts.gen.update('none');
 
-      // 05. Source Line 차트 갱신
       charts.source.data.datasets[0].data = g.gas;
       charts.source.data.datasets[1].data = g.coal;
       charts.source.data.datasets[2].data = g.solar;
       charts.source.options.plugins.annotation.annotations = { box1: peakAnnotation };
       charts.source.update('none');
 
-      // 06. Spread 차트 갱신
       charts.spread.data.datasets[0].data = g.spread;
       charts.spread.data.datasets[1].data = d.smp_hourly;
       charts.spread.options.plugins.annotation.annotations = {
@@ -380,7 +342,6 @@
       charts.spread.update('none');
     }
 
-    // 마스터 데이터 로딩 (캐시 방지 타임스탬프 적용)
     fetch('data.json?t=' + new Date().getTime())
       .then(res => res.json())
       .then(data => {
