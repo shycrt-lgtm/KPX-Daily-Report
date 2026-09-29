@@ -9,76 +9,107 @@ from datetime import datetime, timedelta
 print(">> SPA master data.json 일일 업데이트 시작...")
 
 DATA_FILE = "data.json"
-DATA_GO_KR_KEY = os.environ.get("DATA_GO_KR_KEY", "")
+DATA_GO_KR_KEY = os.environ.get("DATA_GO_KR_KEY", "").strip()
 
-# 1. 기존 master data.json 로딩 (없으면 최초 백필 파싱 실행)
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        master = json.load(f)
-else:
-    raise FileNotFoundError("data.json 파일이 없습니다. 최초 1회 백필 생성 스크립트를 먼저 실행해주세요.")
+if not DATA_GO_KR_KEY:
+    raise ValueError("DATA_GO_KR_KEY가 비어 있습니다. GitHub Secrets를 확인하세요.")
 
+if not os.path.exists(DATA_FILE):
+    raise FileNotFoundError("data.json 파일이 없습니다. backfill_generator.py를 먼저 실행하세요.")
+
+with open(DATA_FILE, "r", encoding="utf-8") as f:
+    master = json.load(f)
+
+# 어제 날짜 (2026-09-28)
 target_dt = datetime.now() - timedelta(days=1)
 target_date_str = target_dt.strftime("%Y%m%d")
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 
-# 2. 공공데이터포털 API 실시간 호출 함수 (안전 키 인코딩)
-def fetch_api_smp(trade_date, key):
-    if not key: return None
-    safe_key = urllib.parse.quote(urllib.parse.unquote(key.strip()))
-    url = f"http://apis.data.go.kr/B552115/smpInland/getSmpInlandList?serviceKey={safe_key}&pageNo=1&numOfRows=30&tradeDate={trade_date}&dataType=JSON"
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=12) as res:
-            data = json.loads(res.read().decode('utf-8'))
-            items = sorted(data['response']['body']['items']['item'], key=lambda x: int(x.get('tradeHour', 0)))
-            hourly = [float(x.get('smp', 0)) for x in items if int(x.get('tradeHour', 0)) in range(1, 25)]
-            return hourly if len(hourly) == 24 else None
-    except Exception as e:
-        print(f"SMP API 오류: {e}")
+print(f">> 타깃 일자: {target_date_str}")
+
+# =====================================================================
+# 공공데이터포털 API 호출 (인코딩/디코딩 키 순차 시도 및 상세 로그)
+# =====================================================================
+def fetch_api_smp(trade_date, raw_key):
+    # 인코딩 키와 디코딩 키 2가지 형태로 순차 시도
+    keys_to_try = [
+        raw_key,                                              # 원본 그대로
+        urllib.parse.quote(urllib.parse.unquote(raw_key)),     # 디코딩 후 인코딩
+        urllib.parse.unquote(raw_key)                         # 순수 디코딩
+    ]
+    # 중복 제거
+    keys_to_try = list(dict.fromkeys(keys_to_try))
+
+    for idx, k in enumerate(keys_to_try):
+        url = f"http://apis.data.go.kr/B552115/smpInland/getSmpInlandList?serviceKey={k}&pageNo=1&numOfRows=30&tradeDate={trade_date}&dataType=JSON"
+        print(f">> [시도 {idx+1}] SMP API 호출 중...")
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=12) as res:
+                res_body = res.read().decode('utf-8')
+                print(f">> API 원본 응답 앞부분: {res_body[:200]}")
+                data = json.loads(res_body)
+                items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
+                if items:
+                    items = sorted(items, key=lambda x: int(x.get('tradeHour', 0)))
+                    hourly = [float(x.get('smp', 0)) for x in items if int(x.get('tradeHour', 0)) in range(1, 25)]
+                    if len(hourly) == 24:
+                        print(f"✅ SMP 24시간 실시간 데이터 파싱 성공! (첫시간: {hourly[0]}, 최고: {max(hourly)})")
+                        return hourly
+        except Exception as e:
+            print(f"❌ 시도 {idx+1} 실패: {e}")
     return None
 
-def fetch_api_gen(trade_date, key):
-    if not key: return None
-    safe_key = urllib.parse.quote(urllib.parse.unquote(key.strip()))
-    url = f"http://apis.data.go.kr/B552115/GenByFuel/getGenByFuel?serviceKey={safe_key}&pageNo=1&numOfRows=300&tradeDate={trade_date}&dataType=JSON"
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=12) as res:
-            items = json.loads(res.read().decode('utf-8'))['response']['body']['items']['item']
-            fmap = {'nuclear':[0]*24,'coal':[0]*24,'oil':[0]*24,'gas':[0]*24,'hydro':[0]*24,'pump':[0]*24,'ess':[0]*24,'wind':[0]*24,'solar':[0]*24}
-            cnt = [0]*24
-            for item in items:
-                h = int(str(item.get('tradeHour', item.get('hour', 1)))) - 1
-                if 0 <= h < 24:
-                    cnt[h] += 1
-                    fmap['nuclear'][h] += float(item.get('nuclear', 0) or 0)
-                    fmap['coal'][h] += float(item.get('coal', 0) or 0)
-                    fmap['oil'][h] += float(item.get('oil', 0) or 0)
-                    fmap['gas'][h] += float(item.get('lng', item.get('gas', 0)) or 0)
-                    fmap['hydro'][h] += float(item.get('hydro', 0) or 0)
-                    fmap['pump'][h] += float(item.get('pump', 0) or 0)
-                    fmap['ess'][h] += float(item.get('ess', 0) or 0)
-                    fmap['wind'][h] += float(item.get('wind', 0) or 0)
-                    fmap['solar'][h] += float(item.get('solar', 0) or 0)
-            for f in fmap:
-                for h in range(24):
-                    if cnt[h] > 0: fmap[f][h] = round(fmap[f][h]/cnt[h], 1)
-            return fmap
-    except Exception as e:
-        print(f"발전원 API 오류: {e}")
+def fetch_api_gen(trade_date, raw_key):
+    keys_to_try = [raw_key, urllib.parse.quote(urllib.parse.unquote(raw_key)), urllib.parse.unquote(raw_key)]
+    keys_to_try = list(dict.fromkeys(keys_to_try))
+
+    for idx, k in enumerate(keys_to_try):
+        url = f"http://apis.data.go.kr/B552115/GenByFuel/getGenByFuel?serviceKey={k}&pageNo=1&numOfRows=300&tradeDate={trade_date}&dataType=JSON"
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=12) as res:
+                res_body = res.read().decode('utf-8')
+                data = json.loads(res_body)
+                items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
+                if items:
+                    fmap = {'nuclear':[0.0]*24,'coal':[0.0]*24,'oil':[0.0]*24,'gas':[0.0]*24,'hydro':[0.0]*24,'pump':[0.0]*24,'ess':[0.0]*24,'wind':[0.0]*24,'solar':[0.0]*24}
+                    cnt = [0]*24
+                    for item in items:
+                        h = int(str(item.get('tradeHour', item.get('hour', 1)))) - 1
+                        if 0 <= h < 24:
+                            cnt[h] += 1
+                            fmap['nuclear'][h] += float(item.get('nuclear', 0) or 0)
+                            fmap['coal'][h] += float(item.get('coal', 0) or 0)
+                            fmap['oil'][h] += float(item.get('oil', 0) or 0)
+                            fmap['gas'][h] += float(item.get('lng', item.get('gas', 0)) or 0)
+                            fmap['hydro'][h] += float(item.get('hydro', 0) or 0)
+                            fmap['pump'][h] += float(item.get('pump', 0) or 0)
+                            fmap['ess'][h] += float(item.get('ess', 0) or 0)
+                            fmap['wind'][h] += float(item.get('wind', 0) or 0)
+                            fmap['solar'][h] += float(item.get('solar', 0) or 0)
+                    for f in fmap:
+                        for h in range(24):
+                            if cnt[h] > 0: fmap[f][h] = round(fmap[f][h]/cnt[h], 1)
+                    print("✅ 발전원별 실시간 데이터 파싱 성공!")
+                    return fmap
+        except Exception as e:
+            pass
     return None
 
-# 3. 신규 일자 데이터 API 수집 및 지표 연산
-print(f">> {target_date_str} 신규 일자 수집 시도...")
+# 실제 호출 실행
 api_smp = fetch_api_smp(target_date_str, DATA_GO_KR_KEY)
+if not api_smp:
+    print("🚨 [경고] 9월 28일 SMP API 수집 실패! 전일 데이터로 덮어쓰지 않고 에러 발생시킵니다.")
+    raise ValueError(f"KPX API에서 {target_date_str} SMP 데이터를 받아오지 못했습니다. 로그의 API 원본 응답을 확인하세요.")
+
 api_gen = fetch_api_gen(target_date_str, DATA_GO_KR_KEY)
 
-# 직전일 복사 백업(API 지연 대비)
-prev_key = master.get("latest_date")
-prev_day_data = master["days"].get(prev_key)
+# 직전일 데이터 참조 (비교 및 부가정보용)
+prev_key = "20260927" if "20260927" in master["days"] else master.get("latest_date")
+prev_day_data = master["days"][prev_key]
 
-land_smp = api_smp if api_smp else prev_day_data["smp_hourly"]
+land_smp = api_smp
 smp_avg = round(sum(land_smp)/24, 2)
 smp_max = round(max(land_smp), 2)
 smp_min = round(min(land_smp), 2)
@@ -105,7 +136,7 @@ if api_gen:
 else:
     gen_entry = prev_day_data["gen"]
 
-# 최근 7일 집계
+# 최근 7일 구성 (27일과 비교)
 recent_7 = [{
     'date': f"{target_dt.month}.{target_dt.day}({weekday_kr_list[target_dt.weekday()]})",
     'is_holiday': target_dt.weekday() in [5, 6] or target_date_str in master["holidays"],
@@ -152,4 +183,4 @@ master["latest_date"] = target_date_str
 with open(DATA_FILE, "w", encoding="utf-8") as f:
     json.dump(master, f, ensure_ascii=False)
 
-print(f">> 완료: data.json에 {target_date_str} 실적 추가 완료 (최신일: {target_date_str})")
+print(f"🎉 성공! 진짜 9월 28일 실시간 실적(가중평균: {smp_avg}원)으로 data.json 갱신 완료!")
