@@ -1,43 +1,42 @@
-name: Run Backfill 2022 to Present
+name: Daily Report Automation
 
 on:
-  workflow_dispatch:
+  schedule:
+    # 매일 한국시간 08:30 (UTC 23:30) 자동 실행
+    - cron: '30 23 * * *'
+  workflow_dispatch: # 수동 실행 버튼 활성화
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
-  run-backfill:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: 저장소 코드 가져오기
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 파이썬 환경 설정
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 필수 패키지 설치
+      - name: Install Dependencies
         run: |
-          pip install pandas openpyxl numpy
+          pip install pandas openpyxl google-generativeai
 
-      - name: 과거 데이터 일괄 백필 실행
+      - name: Run Daily Report Generator
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: |
-          python backfill_generator.py
+          python build_report.py
 
-      - name: 가장 최신 리포트를 index.html로 복사 (메인 접속용)
+      - name: Commit and Push Updated Report
         run: |
-          LATEST_FILE=$(ls -t daily_report_*.html | head -n 1)
-          if [ -n "$LATEST_FILE" ]; then
-            cp "$LATEST_FILE" index.html
-            echo "Latest file $LATEST_FILE copied to index.html"
-          fi
-
-      - name: 생성된 HTML 파일 자동 커밋 및 푸시
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add daily_report_*.html index.html
-          git commit -m "Auto Backfill: 2022년 이후 일일 리포트 일괄 생성 완료" || echo "변경사항 없음"
-          git push
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html daily_report_*.html
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto: Update daily report [$(date +'%Y-%m-%d')]" && git push)
