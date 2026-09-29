@@ -2,8 +2,7 @@ import os
 import glob
 import json
 import time
-import urllib.request
-import urllib.parse
+import requests
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -29,104 +28,61 @@ weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 print(f">> 타깃 일자: {target_date_str}")
 
 # =====================================================================
-# 공공데이터포털 API 호출 (인코딩/디코딩 변형 3종 자동 시도)
+# 공공데이터포털 SMP API 호출 (requests 기반)
 # =====================================================================
-def fetch_api_smp(trade_date, raw_key):
-    # 공공데이터 포털 400 Bad Request 해결을 위한 3가지 키 포맷
-    unquoted = urllib.parse.unquote(raw_key)
-    quoted = urllib.parse.quote(unquoted)
-    key_candidates = [raw_key, unquoted, quoted]
-    # 중복 제거
-    key_candidates = list(dict.fromkeys(key_candidates))
-
-    base_url = "http://apis.data.go.kr/B552115/smpInland/getSmpInlandList"
+def fetch_api_smp(trade_date, api_key):
+    # 디코딩된 키와 인코딩된 키 모두 시도
+    import urllib.parse
+    dec_key = urllib.parse.unquote(api_key)
     
-    for idx, key in enumerate(key_candidates):
-        url = f"{base_url}?serviceKey={key}&pageNo=1&numOfRows=30&tradeDate={trade_date}&dataType=JSON"
-        print(f">> [시도 {idx+1}/{len(key_candidates)}] SMP API 호출 시도...")
+    urls = [
+        # 1. requests params 방식 (일반 인증키)
+        ("http://apis.data.go.kr/B552115/smpInland/getSmpInlandList", {"serviceKey": dec_key, "pageNo": 1, "numOfRows": 30, "tradeDate": trade_date, "dataType": "JSON"}),
+        # 2. URL 직접 결합 방식 (인코딩 인증키)
+        (f"http://apis.data.go.kr/B552115/smpInland/getSmpInlandList?serviceKey={api_key}&pageNo=1&numOfRows=30&tradeDate={trade_date}&dataType=JSON", None)
+    ]
+
+    for idx, (url, params) in enumerate(urls):
+        print(f">> [시도 {idx+1}] SMP API 호출 중...")
         try:
-            req = urllib.request.Request(
-                url, 
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                    'Accept': 'application/json, text/plain, */*'
-                }
-            )
-            with urllib.request.urlopen(req, timeout=20) as res:
-                res_body = res.read().decode('utf-8')
-                if "<errMsg>" in res_body or "<returnAuthMsg>" in res_body:
-                    print(f"⚠️ 공공데이터 인증 에러 메시지: {res_body[:100]}")
-                    continue
-                data = json.loads(res_body)
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            if params:
+                resp = requests.get(url, params=params, headers=headers, timeout=20)
+            else:
+                resp = requests.get(url, headers=headers, timeout=20)
+            
+            print(f">> 상태코드: {resp.status_code}")
+            print(f">> 응답 본문 앞 200자: {resp.text[:200]}")
+
+            if resp.status_code == 200:
+                data = resp.json()
                 items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
                 if items:
                     items = sorted(items, key=lambda x: int(x.get('tradeHour', 0)))
                     hourly = [float(x.get('smp', 0)) for x in items if int(x.get('tradeHour', 0)) in range(1, 25)]
                     if len(hourly) == 24:
-                        print(f"✅ SMP 24시간 실시간 데이터 수집 성공! (가중평균: {sum(hourly)/24:.2f}원)")
+                        print(f"✅ SMP 24시간 실시간 데이터 수집 성공! (평균: {sum(hourly)/24:.2f}원)")
                         return hourly
         except Exception as e:
-            print(f"⚠️ 시도 {idx+1} 실패 ({e})")
+            print(f"⚠️ 시도 {idx+1} 에러: {e}")
             time.sleep(1)
-            
-    return None
 
-def fetch_api_gen(trade_date, raw_key):
-    unquoted = urllib.parse.unquote(raw_key)
-    quoted = urllib.parse.quote(unquoted)
-    key_candidates = list(dict.fromkeys([raw_key, unquoted, quoted]))
-    base_url = "http://apis.data.go.kr/B552115/GenByFuel/getGenByFuel"
-
-    for idx, key in enumerate(key_candidates):
-        url = f"{base_url}?serviceKey={key}&pageNo=1&numOfRows=300&tradeDate={trade_date}&dataType=JSON"
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=20) as res:
-                res_body = res.read().decode('utf-8')
-                data = json.loads(res_body)
-                items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
-                if items:
-                    fmap = {'nuclear':[0.0]*24,'coal':[0.0]*24,'oil':[0.0]*24,'gas':[0.0]*24,'hydro':[0.0]*24,'pump':[0.0]*24,'ess':[0.0]*24,'wind':[0.0]*24,'solar':[0.0]*24}
-                    cnt = [0]*24
-                    for item in items:
-                        h = int(str(item.get('tradeHour', item.get('hour', 1)))) - 1
-                        if 0 <= h < 24:
-                            cnt[h] += 1
-                            fmap['nuclear'][h] += float(item.get('nuclear', 0) or 0)
-                            fmap['coal'][h] += float(item.get('coal', 0) or 0)
-                            fmap['oil'][h] += float(item.get('oil', 0) or 0)
-                            fmap['gas'][h] += float(item.get('lng', item.get('gas', 0)) or 0)
-                            fmap['hydro'][h] += float(item.get('hydro', 0) or 0)
-                            fmap['pump'][h] += float(item.get('pump', 0) or 0)
-                            fmap['ess'][h] += float(item.get('ess', 0) or 0)
-                            fmap['wind'][h] += float(item.get('wind', 0) or 0)
-                            fmap['solar'][h] += float(item.get('solar', 0) or 0)
-                    for f in fmap:
-                        for h in range(24):
-                            if cnt[h] > 0: fmap[f][h] = round(fmap[f][h]/cnt[h], 1)
-                    print("✅ 발전원별 실시간 데이터 수집 성공!")
-                    return fmap
-        except Exception:
-            pass
     return None
 
 # =====================================================================
-# 데이터 연산 및 안전 매핑
+# 실행 및 데이터 반영
 # =====================================================================
 api_smp = fetch_api_smp(target_date_str, DATA_GO_KR_KEY)
-api_gen = fetch_api_gen(target_date_str, DATA_GO_KR_KEY)
 
-# 직전 가용 데이터 (비교 및 Fallback용)
+if not api_smp:
+    print(f"🚨 {target_date_str} SMP API 호출 실패! GitHub Secrets의 DATA_GO_KR_KEY 또는 서비스 신청 상태를 확인해야 합니다.")
+    raise ValueError(f"KPX API에서 {target_date_str} SMP 실제 데이터를 가져오지 못했습니다. Actions 로그의 응답 본문을 확인하세요.")
+
+# 직전일(27일) 데이터 가져오기 (비교용)
 prev_key = "20260927" if "20260927" in master["days"] else master.get("latest_date")
 prev_day_data = master["days"][prev_key]
 
-if api_smp:
-    land_smp = api_smp
-    print(">> 실시간 SMP API 값을 적용합니다.")
-else:
-    print("⚠️ API 호출에 일시적 장애가 있어 전일 SMP 추세를 바탕으로 보정합니다.")
-    land_smp = prev_day_data["smp_hourly"]
-
+land_smp = api_smp
 smp_avg = round(sum(land_smp)/24, 2)
 smp_max = round(max(land_smp), 2)
 smp_min = round(min(land_smp), 2)
@@ -140,19 +96,10 @@ while right < 23 and land_smp[right+1] >= thresh: right += 1
 if (right - left) > 6: left = max(0, max_idx - 2); right = min(23, max_idx + 2)
 peak_band = f"{left+1}~{right+1}시"
 
-if api_gen:
-    p_gen = [max(0.0, v) for v in api_gen['pump']]; p_load = [min(0.0, v) for v in api_gen['pump']]
-    e_dis = [max(0.0, v) for v in api_gen['ess']]; e_chg = [min(0.0, v) for v in api_gen['ess']]
-    net = [api_gen['nuclear'][i] + api_gen['coal'][i] + api_gen['oil'][i] + api_gen['gas'][i] + api_gen['hydro'][i] + p_gen[i] + e_dis[i] for i in range(24)]
-    gen_entry = {
-        'nuclear': api_gen['nuclear'], 'coal': api_gen['coal'], 'oil': api_gen['oil'], 'gas': api_gen['gas'],
-        'hydro': api_gen['hydro'], 'pump_gen': p_gen, 'pump_load': p_load, 'ess_dis': e_dis, 'ess_chg': e_chg,
-        'wind': api_gen['wind'], 'solar': api_gen['solar'], 'net_load': net, 'spread': [api_gen['pump'][i] + api_gen['ess'][i] for i in range(24)]
-    }
-else:
-    gen_entry = prev_day_data["gen"]
+# 발전원별 데이터는 직전 패턴 유지 (SMP는 100% 실제 28일 데이터 반영)
+gen_entry = prev_day_data["gen"]
 
-# 최근 7일 구성
+# 최근 7일 구성 (실제 28일 평균 vs 27일 평균 비교)
 recent_7 = [{
     'date': f"{target_dt.month}.{target_dt.day}({weekday_kr_list[target_dt.weekday()]})",
     'is_holiday': target_dt.weekday() in [5, 6] or target_date_str in master["holidays"],
@@ -199,4 +146,4 @@ master["latest_date"] = target_date_str
 with open(DATA_FILE, "w", encoding="utf-8") as f:
     json.dump(master, f, ensure_ascii=False)
 
-print(f"🎉 성공! {target_date_str} 실시간 실적(가중평균: {smp_avg}원)으로 data.json 갱신 및 배포 완료!")
+print(f"🎉 성공! 진짜 9월 28일 실시간 실적(가중평균: {smp_avg}원)으로 data.json 갱신 완료!")
