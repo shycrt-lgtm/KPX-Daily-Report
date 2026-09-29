@@ -7,12 +7,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
-  
-  <!-- Flatpickr 커스텀 달력 및 한글 로케일 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -25,40 +22,18 @@
     .text-holiday { color: #dc2626 !important; font-weight: 700; }
     h2 { font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
     .summary-box li { margin-bottom: 0.5rem; }
-
-    /* 달력 팝업 내 일요일, 토요일, 대한민국 공휴일 빨간색 강제 스타일링 */
     .flatpickr-calendar { border: 1px solid #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); }
     .flatpickr-calendar .flatpickr-day.holiday-day,
-    .flatpickr-calendar .flatpickr-day.weekend-day {
-      color: #dc2626 !important;
-      font-weight: 700 !important;
-    }
-    .flatpickr-calendar .flatpickr-day.holiday-day::after {
-      content: '';
-      position: absolute;
-      bottom: 3px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background-color: #dc2626;
-    }
+    .flatpickr-calendar .flatpickr-day.weekend-day { color: #dc2626 !important; font-weight: 700 !important; }
+    .flatpickr-calendar .flatpickr-day.holiday-day::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background-color: #dc2626; }
     .flatpickr-calendar .flatpickr-day.selected.holiday-day,
-    .flatpickr-calendar .flatpickr-day.selected.weekend-day {
-      background: #001f3f !important;
-      color: #ffffff !important;
-    }
+    .flatpickr-calendar .flatpickr-day.selected.weekend-day { background: #001f3f !important; color: #ffffff !important; }
     .flatpickr-calendar .flatpickr-weekday:first-child,
-    .flatpickr-calendar .flatpickr-weekday:last-child {
-      color: #dc2626 !important;
-      font-weight: 700;
-    }
+    .flatpickr-calendar .flatpickr-weekday:last-child { color: #dc2626 !important; font-weight: 700; }
   </style>
 </head>
 <body class="p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-8">
-    <!-- 헤더 영역 -->
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
@@ -69,32 +44,32 @@
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
           <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 발전원별 수급현황">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition">
             <span>⚡ 실시간 수급현황</span>
             <svg class="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
           <a href="https://new.kpx.or.kr/smpInland.es?mid=a10404080100&device=pc" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition" title="KPX 당일 시간대별 SMP">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition">
             <span>📈 실시간 SMP</span>
             <svg class="w-3 h-3 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          
-      <a href="daily_report_20260927.html" 
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+          <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
+          <div class="relative flex items-center">
+            <input type="text" id="historyDate" value="2026-09-17" 
+                   class="bg-transparent text-xs md:text-sm font-bold text-slate-800 font-bold outline-none cursor-pointer w-28 pr-6 text-center" readonly>
+            <svg class="w-4 h-4 text-slate-500 absolute right-1 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <span class="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-white border-slate-200" >(목)</span>
+          <div class="ml-2 pl-2 border-l border-slate-200">
+            
+      <a href="index.html" 
          class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition" title="확정된 가장 최근 실적일로 이동">
         <span>⚡ 최신 실적(09.27)으로</span> &rarr;
       </a>
     
-          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-            <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
-            <div class="relative flex items-center">
-              <input type="text" id="historyDate" value="2026-09-17" 
-                     class="bg-transparent text-xs md:text-sm font-bold text-slate-800 font-bold outline-none cursor-pointer w-28 pr-6 text-center" readonly>
-              <svg class="w-4 h-4 text-slate-500 absolute right-1 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-            </div>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-white border-slate-200" >(목)</span>
           </div>
         </div>
       </div>
@@ -269,7 +244,6 @@
   <script>
     const holidayMap = {"2022-01-01": "신정", "2022-01-31": "설날연휴", "2022-02-01": "설날", "2022-02-02": "설날연휴", "2022-03-01": "삼일절", "2022-03-09": "대통령선거", "2022-05-05": "어린이날", "2022-05-08": "부처님오신날", "2022-06-01": "지방선거", "2022-06-06": "현충일", "2022-08-15": "광복절", "2022-09-09": "추석연휴", "2022-09-10": "추석", "2022-09-11": "추석연휴", "2022-09-12": "대체공휴일", "2022-10-03": "개천절", "2022-10-09": "한글날", "2022-10-10": "대체공휴일", "2022-12-25": "성탄절", "2023-01-01": "신정", "2023-01-21": "설날연휴", "2023-01-22": "설날", "2023-01-23": "설날연휴", "2023-01-24": "대체공휴일", "2023-03-01": "삼일절", "2023-05-05": "어린이날", "2023-05-27": "부처님오신날", "2023-05-29": "대체공휴일", "2023-06-06": "현충일", "2023-08-15": "광복절", "2023-09-28": "추석연휴", "2023-09-29": "추석", "2023-09-30": "추석연휴", "2023-10-02": "임시공휴일", "2023-10-03": "개천절", "2023-10-09": "한글날", "2023-12-25": "성탄절", "2024-01-01": "신정", "2024-02-09": "설날연휴", "2024-02-10": "설날", "2024-02-11": "설날연휴", "2024-02-12": "대체공휴일", "2024-03-01": "삼일절", "2024-04-10": "국회의원선거", "2024-05-05": "어린이날", "2024-05-06": "대체공휴일", "2024-05-15": "부처님오신날", "2024-06-06": "현충일", "2024-08-15": "광복절", "2024-09-16": "추석연휴", "2024-09-17": "추석", "2024-09-18": "추석연휴", "2024-10-01": "임시공휴일(국군의날)", "2024-10-03": "개천절", "2024-10-09": "한글날", "2024-12-25": "성탄절", "2025-01-01": "신정", "2025-01-28": "설날연휴", "2025-01-29": "설날", "2025-01-30": "설날연휴", "2025-03-01": "삼일절", "2025-03-03": "대체공휴일", "2025-05-05": "어린이날", "2025-05-06": "대체공휴일", "2025-06-06": "현충일", "2025-08-15": "광복절", "2025-10-03": "개천절", "2025-10-05": "추석연휴", "2025-10-06": "추석", "2025-10-07": "추석연휴", "2025-10-08": "대체공휴일", "2025-10-09": "한글날", "2025-12-25": "성탄절", "2026-01-01": "신정", "2026-02-16": "설날연휴", "2026-02-17": "설날", "2026-02-18": "설날연휴", "2026-03-01": "삼일절", "2026-03-02": "대체공휴일", "2026-05-05": "어린이날", "2026-05-24": "부처님오신날", "2026-05-25": "대체공휴일", "2026-06-03": "지방선거", "2026-06-06": "현충일", "2026-08-15": "광복절", "2026-08-17": "대체공휴일", "2026-09-24": "추석연휴", "2026-09-25": "추석", "2026-09-26": "추석연휴", "2026-10-03": "개천절", "2026-10-05": "대체공휴일", "2026-10-09": "한글날", "2026-12-25": "성탄절", "2027-01-01": "신정", "2027-02-06": "설날연휴", "2027-02-07": "설날", "2027-02-08": "설날연휴", "2027-02-09": "대체공휴일", "2027-03-01": "삼일절", "2027-03-03": "대통령선거", "2027-05-05": "어린이날", "2027-05-13": "부처님오신날", "2027-06-06": "현충일", "2027-08-15": "광복절", "2027-08-16": "대체공휴일", "2027-09-14": "추석연휴", "2027-09-15": "추석", "2027-09-16": "추석연휴", "2027-10-03": "개천절", "2027-10-04": "대체공휴일", "2027-10-09": "한글날", "2027-10-11": "대체공휴일", "2027-12-25": "성탄절"};
 
-    // Flatpickr 커스텀 달력 초기화 (팝업 내 주말 및 공휴일 빨간색 적용)
     flatpickr("#historyDate", {
       locale: "ko",
       dateFormat: "Y-m-d",
@@ -280,9 +254,7 @@
       onDayCreate: function(dObj, dStr, fp, dayElem) {
         const dateStr = flatpickr.formatDate(dayElem.dateObj, "Y-m-d");
         const dayOfWeek = dayElem.dateObj.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          dayElem.classList.add("weekend-day");
-        }
+        if (dayOfWeek === 0 || dayOfWeek === 6) dayElem.classList.add("weekend-day");
         if (holidayMap[dateStr]) {
           dayElem.classList.add("holiday-day");
           dayElem.setAttribute("title", holidayMap[dateStr]);
@@ -292,8 +264,8 @@
         if (!dateStr) return;
         const latest = "2026-09-27";
         if (dateStr > latest) {
-          alert("오늘 실시간 수급현황 및 SMP는 상단의 [KPX 실시간 바로가기] 버튼을 통해 확인하실 수 있습니다.\n\n일일 종합 분석 리포트는 24시간 마감 후 익일 아침 발행됩니다. 확정 최신일(" + latest + ")로 이동합니다.");
-          window.location.href = "daily_report_20260927.html";
+          alert("아직 실적이 확정되지 않은 날짜입니다.\n가장 최신 확정일(" + latest + ")로 이동합니다.");
+          window.location.href = "index.html";
           return;
         }
         window.location.href = "daily_report_" + dateStr.replace(/-/g, '') + ".html";
@@ -301,9 +273,7 @@
     });
 
     Chart.register(window['chartjs-plugin-annotation']);
-    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {
-      return eventPosition ? { x: eventPosition.x, y: eventPosition.y } : false;
-    };
+    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) { return eventPosition ? { x: eventPosition.x, y: eventPosition.y } : false; };
     const crosshairPlugin = {
       id: 'crosshair',
       afterDraw: chart => {
@@ -333,63 +303,38 @@
       plugins: {
         legend: { 
           labels: { 
-            usePointStyle: true, 
-            font: { family: 'Noto Sans KR', size: 12 },
+            usePointStyle: true, font: { family: 'Noto Sans KR', size: 12 },
             generateLabels: function(chart) {
               const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
               original.forEach(label => {
                 const ds = chart.data.datasets[label.datasetIndex];
-                if (ds && ds.borderDash) {
-                  label.lineDash = ds.borderDash;
-                }
+                if (ds && ds.borderDash) label.lineDash = ds.borderDash;
               });
               return original;
             }
           } 
         },
         tooltip: {
-          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1,
-          padding: 10, boxPadding: 4, usePointStyle: true,
-          titleFont: { family: 'Noto Sans KR', size: 13, weight: 'bold' },
-          bodyFont: { family: 'Noto Sans KR', size: 12 }
+          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true, titleFont: { family: 'Noto Sans KR', size: 13, weight: 'bold' }, bodyFont: { family: 'Noto Sans KR', size: 12 }
         }
       },
-      scales: { 
-        x: { grid: { display: false } }, 
-        y: { 
-          grid: { color: '#f1f5f9' },
-          grace: '20%'
-        } 
-      }
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, grace: '20%' } }
     };
 
     const dynamicPeakAnnotation = {
-      type: 'box', xMin: 18, xMax: 20,
-      backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
+      type: 'box', xMin: 18, xMax: 20, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
       label: { display: true, content: '19~21시 피크', position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} }
     };
 
-    // 02. SMP 차트
     new Chart(document.getElementById('smpChart'), {
       type: 'line',
       data: {
         labels: labels,
-        datasets: [{
-          label: '시간대별 SMP (원/kWh)', data: [98.27, 95.33, 95.33, 95.33, 95.33, 95.33, 96.11, 102.07, 105.82, 100.96, 96.53, 95.33, 95.33, 97.1, 97.1, 112.47, 113.05, 113.05, 116.61, 117.08, 117.08, 106.44, 106.44, 106.44], pointStyle: 'line',
-          borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1
-        }]
+        datasets: [{ label: '시간대별 SMP (원/kWh)', data: [98.27, 95.33, 95.33, 95.33, 95.33, 95.33, 96.11, 102.07, 105.82, 100.96, 96.53, 95.33, 95.33, 97.1, 97.1, 112.47, 113.05, 113.05, 116.61, 117.08, 117.08, 106.44, 106.44, 106.44], pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1 }]
       },
       options: {
         ...commonOptions,
-        scales: {
-          x: { grid: { display: false } },
-          y: { 
-            grid: { color: '#f1f5f9' },
-            title: { display: true, text: '원/kWh' },
-            grace: '20%'
-          }
-        },
+        scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, title: { display: true, text: '원/kWh' }, grace: '20%' } },
         plugins: {
           ...commonOptions.plugins,
           annotation: {
@@ -405,7 +350,6 @@
       }
     });
 
-    // 04. 발전원별 구성 차트
     new Chart(document.getElementById('generationChart'), {
       type: 'line',
       data: {
@@ -425,16 +369,9 @@
           { label: 'ESS충전', data: [-17.2, -22.5, -22.0, -52.6, -68.9, -67.7, -17.4, -67.6, -272.8, -547.4, -855.1, -922.7, -787.4, -394.3, -152.9, -34.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -13.7], backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }
         ]
       },
-      options: { 
-        ...commonOptions, 
-        scales: { 
-          x: { stacked: true, grid: { display: false } }, 
-          y: { stacked: true, grace: '10%' } 
-        } 
-      }
+      options: { ...commonOptions, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grace: '10%' } } }
     });
 
-    // 05. 주요 발전원 라인 차트
     new Chart(document.getElementById('sourceLineChart'), {
       type: 'line',
       data: {
@@ -448,7 +385,6 @@
       options: { ...commonOptions, plugins: { ...commonOptions.plugins, annotation: { annotations: { box1: dynamicPeakAnnotation } } } }
     });
 
-    // 06. SMP 스프레드 차트
     new Chart(document.getElementById('spreadChart'), {
       type: 'line',
       data: {
@@ -462,48 +398,17 @@
         ...commonOptions,
         scales: {
           x: { grid: { display: false } },
-          y: { 
-            type: 'linear', 
-            display: true, 
-            position: 'left', 
-            title: { display: true, text: 'MW' },
-            grace: '15%'
-          },
-          y1: { 
-            type: 'linear', 
-            display: true, 
-            position: 'right', 
-            grid: { drawOnChartArea: false }, 
-            title: { display: true, text: '원/kWh' },
-            grace: '20%'
-          }
+          y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'MW' }, grace: '15%' },
+          y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '원/kWh' }, grace: '20%' }
         },
         plugins: {
           ...commonOptions.plugins,
           annotation: {
             annotations: {
-              spreadMaxPt: { 
-                type: 'point', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: 19, yValue: 117.08, 
-                backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' 
-              },
-              spreadMaxLbl: { 
-                type: 'label', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: 19, yValue: 117.08, 
-                content: ['최고 ' + Number(117.08).toFixed(2) + '원'], 
-                font: { size: 10, weight: 'bold' }, color: '#d93c39', yAdjust: -14 
-              },
-              spreadMinPt: { 
-                type: 'point', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: 1, yValue: 95.33, 
-                backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' 
-              },
-              spreadMinLbl: { 
-                type: 'label', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: 1, yValue: 95.33, 
-                content: ['최저 ' + Number(95.33).toFixed(2) + '원'], 
-                font: { size: 10, weight: 'bold' }, color: '#005587', yAdjust: -14 
-              }
+              spreadMaxPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 19, yValue: 117.08, backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
+              spreadMaxLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 19, yValue: 117.08, content: ['최고 ' + Number(117.08).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#d93c39', yAdjust: -14 },
+              spreadMinPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: 1, yValue: 95.33, backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
+              spreadMinLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: 1, yValue: 95.33, content: ['최저 ' + Number(95.33).toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#005587', yAdjust: -14 }
             }
           }
         }
