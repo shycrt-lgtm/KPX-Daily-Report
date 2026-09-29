@@ -281,7 +281,7 @@ html_content = f"""<!DOCTYPE html>
           <span class="text-xs font-bold px-1.5 py-0.5 rounded border {badge_color_cls}" {badge_title}>({w_kr})</span>
           <div class="ml-2 pl-2 border-l border-slate-200">
             <a href="index.html" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition" title="확정된 가장 최근 실적일로 이동">
-              <span>⚡ 최신 실적({target_dt.strftime('%m.%d')})으로</span> &rarr;
+              <span>⚡ 최신 실적으로</span> &rarr;
             </a>
           </div>
         </div>
@@ -421,7 +421,6 @@ html_content = f"""<!DOCTYPE html>
 
     const labels = {json_hours};
 
-    // 모든 그래프 공통 옵션: 선형 범례(usePointStyle: true) 및 호버 툴팁 복원
     const commonOptions = {{
       responsive: true, maintainAspectRatio: false,
       layout: {{ padding: {{ top: 40, right: 20, bottom: 20, left: 10 }} }},
@@ -452,7 +451,7 @@ html_content = f"""<!DOCTYPE html>
       scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }}, grace: '20%' }} }}
     }};
 
-    // 02. SMP 차트
+    // 02. SMP 차트 (호버 툴팁 포맷: 16시 -> 112.47원/kWh)
     new Chart(document.getElementById('smpChart'), {{
       type: 'line',
       data: {{ labels: labels, datasets: [{{ label: '시간대별 SMP (원/kWh)', data: {json.dumps(land_smp)}, pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1 }}] }},
@@ -461,6 +460,14 @@ html_content = f"""<!DOCTYPE html>
         scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }}, title: {{ display: true, text: '원/kWh' }}, grace: '20%' }} }},
         plugins: {{
           ...commonOptions.plugins,
+          tooltip: {{
+            ...commonOptions.plugins.tooltip,
+            callbacks: {{
+              label: function(context) {{
+                return ' ' + Number(context.raw).toFixed(2) + '원/kWh';
+              }}
+            }}
+          }},
           annotation: {{
             annotations: {{
               peakBox: {{ type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0, label: {{ display: true, content: '{peak_band_label} 피크', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }} }},
@@ -497,7 +504,7 @@ html_content = f"""<!DOCTYPE html>
       options: {{ ...commonOptions, scales: {{ x: {{ stacked: true, grid: {{ display: false }} }}, y: {{ stacked: true, grace: '10%' }} }} }}
     }});
 
-    // 05. 주요 발전원 라인 차트 (석탄 실선 통일, 범례 선 모양)
+    // 05. 주요 발전원 라인 차트 ('태양광'으로 명칭 통일, 석탄 실선 통일)
     new Chart(document.getElementById('sourceLineChart'), {{
       type: 'line',
       data: {{
@@ -505,7 +512,7 @@ html_content = f"""<!DOCTYPE html>
         datasets: [
           {{ label: 'LNG', data: {json.dumps(g_info['gas'])}, pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }},
           {{ label: '석탄', data: {json.dumps(g_info['coal'])}, pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }},
-          {{ label: '신재생(태양광)', data: {json.dumps(g_info['solar'])}, pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }}
+          {{ label: '태양광', data: {json.dumps(g_info['solar'])}, pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }}
         ]
       }},
       options: {{ ...commonOptions, plugins: {{ ...commonOptions.plugins, annotation: {{ annotations: {{ box1: {{ type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0 }} }} }} }} }}
@@ -555,18 +562,4 @@ with open(daily_filename, "w", encoding="utf-8") as f:
 
 shutil.copyfile(daily_filename, "index.html")
 
-# 과거 HTML 파일들의 '최신 실적으로' 버튼 링크 및 날짜 텍스트를 오늘 기준(D-1)으로 일괄 최신화
-latest_btn_replacement = f'<span>⚡ 최신 실적({target_dt.strftime("%m.%d")})으로</span> &rarr;'
-for old_html in glob.glob("daily_report_*.html"):
-    if old_html == daily_filename: continue
-    try:
-        with open(old_html, "r", encoding="utf-8") as f:
-            content = f.read()
-        if "⚡ 최신 실적" in content:
-            import re
-            content = re.sub(r'<span>⚡ 최신 실적\([0-9.]+\)으로</span> &rarr;', latest_btn_replacement, content)
-            with open(old_html, "w", encoding="utf-8") as f:
-                f.write(content)
-    except: pass
-
-print(f">> 완료: {daily_filename} 생성, index.html 배포 및 과거 파일 최신버튼({target_dt.strftime('%m.%d')}) 동기화 완료!")
+print(f">> 완료: {daily_filename} 생성 및 index.html 배포 완료!")
