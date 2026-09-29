@@ -3,9 +3,10 @@ import glob
 import json
 import pandas as pd
 import numpy as np
+import shutil
 from datetime import datetime, timedelta
 
-print(">> 데이터 파일 로딩 시작...")
+print(">> 엑셀/CSV 실제 데이터 파일 로딩 시작...")
 
 def read_flexible_csv(file_path):
     for enc in ['cp949', 'utf-8-sig', 'euc-kr', 'utf-8']:
@@ -36,18 +37,14 @@ for _, row in df_smp.iterrows():
         'min': float(str(row['최소']).replace(',', '')),
         'avg': float(str(row['가중평균']).replace(',', ''))
     }
-print(f"SMP 로딩 완료: {len(smp_dict)}일")
 
-# 1-1. 월별 가중평균 SMP 계산 (전월 평균 SMP 산출용)
 monthly_smp_dict = {}
-smp_months = set(k[:6] for k in smp_dict.keys())
-for ym in smp_months:
+for ym in set(k[:6] for k in smp_dict.keys()):
     month_days = [v['avg'] for k, v in smp_dict.items() if k.startswith(ym)]
     if month_days:
         monthly_smp_dict[ym] = round(sum(month_days) / len(month_days), 2)
-print(f"월별 평균 SMP 집계 완료: {len(monthly_smp_dict)}개월")
 
-# 2. 일별 최대부하 및 예비율 로딩
+# 2. 수급실적 (최대부하) 로딩
 cap_candidates = glob.glob("*최대부하*.csv") + glob.glob("*최대부하*.xlsx")
 if not cap_candidates:
     raise FileNotFoundError("최대부하 파일을 찾을 수 없습니다.")
@@ -70,16 +67,12 @@ for _, row in df_cap.iterrows():
         'res': float(str(row['공급예비율(%)']).replace(',', '')),
         'time': peak_hour
     }
-print(f"수급실적 로딩 완료: {len(cap_dict)}일")
 
 # 3. LNG 단가 로딩
 lng_dict = {}
 lng_candidates = glob.glob("*LNG*.xlsx") + [f for f in glob.glob("*.xlsx") if "5." in f]
 if lng_candidates:
-    lng_file = lng_candidates[0]
-    print(f"LNG 단가 파일 로딩 중: {lng_file}")
-    df_lng = pd.read_excel(lng_file, sheet_name="입방당", header=None)
-    
+    df_lng = pd.read_excel(lng_candidates[0], sheet_name="입방당", header=None)
     month_cols = {}
     for r in range(min(15, len(df_lng))):
         row_vals = [str(x).replace('.0','').replace('월','').strip() for x in df_lng.iloc[r]]
@@ -87,17 +80,14 @@ if lng_candidates:
         if len(found) >= 10:
             month_cols = found
             break
-            
     current_year = None
     for r in range(len(df_lng)):
         row_strs = [str(x).replace(' ', '') for x in df_lng.iloc[r]]
-        
         for cell in row_strs:
             c_clean = cell.replace('.0', '')
             if c_clean.isdigit() and len(c_clean) == 4 and int(c_clean) >= 2000:
                 current_year = int(c_clean)
                 break
-                
         if any("합계" in c for c in row_strs) and current_year:
             for m, c_idx in month_cols.items():
                 val = df_lng.iloc[r, c_idx]
@@ -105,32 +95,24 @@ if lng_candidates:
                     v = float(str(val).replace(',', '').strip())
                     if v > 0:
                         lng_dict[f"{current_year}{m:02d}"] = v
-                except:
-                    pass
-print(f"LNG 단가 로딩 완료: {len(lng_dict)}개월 데이터 확보")
+                except: pass
 
-# 4. 발전원별 발전량 연도별 로딩 및 집계
+# 4. 발전원별 발전량 로딩
 gen_dict = {}
 gen_files = sorted(glob.glob("*발전원별 발전량_*.xlsx"))
 for gf in gen_files:
-    print(f"발전량 파싱 중: {gf}...")
     xl = pd.ExcelFile(gf)
     df_g = pd.read_excel(gf, sheet_name=xl.sheet_names[0])
     df_g['일시'] = pd.to_datetime(df_g['일시'])
     df_g['일자'] = df_g['일시'].dt.strftime('%Y%m%d')
     df_g['시'] = df_g['일시'].dt.hour
-    
-    numeric_cols = [c for c in df_g.columns if c not in ['일시', '일자', '시']]
-    for c in numeric_cols:
+    num_cols = [c for c in df_g.columns if c not in ['일시', '일자', '시']]
+    for c in num_cols:
         df_g[c] = pd.to_numeric(df_g[c].astype(str).str.replace(',', ''), errors='coerce').fillna(0.0)
-        
-    grouped = df_g.groupby(['일자', '시'])[numeric_cols].mean().reset_index()
-    
+    grouped = df_g.groupby(['일자', '시'])[num_cols].mean().reset_index()
     for d, g_df in grouped.groupby('일자'):
-        if len(g_df) < 24:
-            continue
+        if len(g_df) < 24: continue
         g_df = g_df.sort_values('시')
-        
         nuc = g_df['원자력'].tolist() if '원자력' in g_df else [0.0]*24
         coal = (g_df['석탄'] if '석탄' in g_df else (g_df['유연탄'] + g_df['국내탄'] if '유연탄' in g_df and '국내탄' in g_df else [0.0]*24)).tolist()
         oil = g_df['유류'].tolist() if '유류' in g_df else [0.0]*24
@@ -140,109 +122,57 @@ for gf in gen_files:
         ess = g_df['ESS'].tolist() if 'ESS' in g_df else [0.0]*24
         wind = g_df['풍력'].tolist() if '풍력' in g_df else [0.0]*24
         solar = g_df['태양광(전력시장)'].tolist() if '태양광(전력시장)' in g_df else [0.0]*24
-        
         pump_gen = [max(0.0, v) for v in pump]
         pump_load = [min(0.0, v) for v in pump]
         ess_dis = [max(0.0, v) for v in ess]
         ess_chg = [min(0.0, v) for v in ess]
-        
         net_ld = [nuc[i] + coal[i] + oil[i] + gas[i] + hydro[i] + pump_gen[i] + ess_dis[i] for i in range(24)]
         spread = [pump[i] + ess[i] for i in range(24)]
-        
         gen_dict[d] = {
-            'nuclear': [round(v, 1) for v in nuc],
-            'coal': [round(v, 1) for v in coal],
-            'oil': [round(v, 1) for v in oil],
-            'gas': [round(v, 1) for v in gas],
-            'hydro': [round(v, 1) for v in hydro],
-            'pump_gen': [round(v, 1) for v in pump_gen],
-            'pump_load': [round(v, 1) for v in pump_load],
-            'ess_dis': [round(v, 1) for v in ess_dis],
-            'ess_chg': [round(v, 1) for v in ess_chg],
-            'wind': [round(v, 1) for v in wind],
-            'solar': [round(v, 1) for v in solar],
-            'net_load': [round(v, 1) for v in net_ld],
-            'spread': [round(v, 1) for v in spread]
+            'nuclear': [round(v, 1) for v in nuc], 'coal': [round(v, 1) for v in coal], 'oil': [round(v, 1) for v in oil],
+            'gas': [round(v, 1) for v in gas], 'hydro': [round(v, 1) for v in hydro],
+            'pump_gen': [round(v, 1) for v in pump_gen], 'pump_load': [round(v, 1) for v in pump_load],
+            'ess_dis': [round(v, 1) for v in ess_dis], 'ess_chg': [round(v, 1) for v in ess_chg],
+            'wind': [round(v, 1) for v in wind], 'solar': [round(v, 1) for v in solar],
+            'net_load': [round(v, 1) for v in net_ld], 'spread': [round(v, 1) for v in spread]
         }
 
-print(f"발전원 집계 완료: {len(gen_dict)}일")
-
 common_dates = sorted(list(set(smp_dict.keys()) & set(gen_dict.keys()) & set(cap_dict.keys())))
+if not common_dates:
+    raise ValueError("공통 데이터(SMP, 수급, 발전량)가 매칭되는 날짜가 없습니다.")
+
 latest_date_str = common_dates[-1]
 latest_dt = datetime.strptime(latest_date_str, "%Y%m%d")
 latest_date_dashed = latest_dt.strftime("%Y-%m-%d")
-print(f">> 최종 생성 대상 일수: {len(common_dates)}일 (최신일자: {latest_date_str})")
+print(f">> 생성 대상: 총 {len(common_dates)}일 (최신 엑셀 실적일: {latest_date_str})")
 
-# 대한민국 법정 공휴일 및 대체공휴일 딕셔너리 (2022~2027+)
 korean_holidays = {
-    # 2022년
-    '20220101': '신정', '20220131': '설날연휴', '20220201': '설날', '20220202': '설날연휴',
-    '20220301': '삼일절', '20220309': '대통령선거', '20220505': '어린이날', '20220508': '부처님오신날',
-    '20220601': '지방선거', '20220606': '현충일', '20220815': '광복절', '20220909': '추석연휴',
-    '20220910': '추석', '20220911': '추석연휴', '20220912': '대체공휴일', '20221003': '개천절',
-    '20221009': '한글날', '20221010': '대체공휴일', '20221225': '성탄절',
-    # 2023년
-    '20230101': '신정', '20230121': '설날연휴', '20230122': '설날', '20230123': '설날연휴',
-    '20230124': '대체공휴일', '20230301': '삼일절', '20230505': '어린이날', '20230527': '부처님오신날',
-    '20230529': '대체공휴일', '20230606': '현충일', '20230815': '광복절', '20230928': '추석연휴',
-    '20230929': '추석', '20230930': '추석연휴', '20231002': '임시공휴일', '20231003': '개천절',
-    '20231009': '한글날', '20231225': '성탄절',
-    # 2024년
-    '20240101': '신정', '20240209': '설날연휴', '20240210': '설날', '20240211': '설날연휴',
-    '20240212': '대체공휴일', '20240301': '삼일절', '20240410': '국회의원선거', '20240505': '어린이날',
-    '20240506': '대체공휴일', '20240515': '부처님오신날', '20240606': '현충일', '20240815': '광복절',
-    '20240916': '추석연휴', '20240917': '추석', '20240918': '추석연휴', '20241001': '임시공휴일(국군의날)',
-    '20241003': '개천절', '20241009': '한글날', '20241225': '성탄절',
-    # 2025년
-    '20250101': '신정', '20250128': '설날연휴', '20250129': '설날', '20250130': '설날연휴',
-    '20250301': '삼일절', '20250303': '대체공휴일', '20250505': '어린이날', '20250506': '대체공휴일',
-    '20250606': '현충일', '20250815': '광복절', '20251003': '개천절', '20251005': '추석연휴',
-    '20251006': '추석', '20251007': '추석연휴', '20251008': '대체공휴일', '20251009': '한글날',
-    '20251225': '성탄절',
-    # 2026년
-    '20260101': '신정', '20260216': '설날연휴', '20260217': '설날', '20260218': '설날연휴',
-    '20260301': '삼일절', '20260302': '대체공휴일', '20260505': '어린이날', '20260524': '부처님오신날',
-    '20260525': '대체공휴일', '20260603': '지방선거', '20260606': '현충일', '20260815': '광복절',
-    '20260817': '대체공휴일', '20260924': '추석연휴', '20260925': '추석', '20260926': '추석연휴',
-    '20261003': '개천절', '20261005': '대체공휴일', '20261009': '한글날', '20261225': '성탄절',
-    # 2027년
-    '20270101': '신정', '20270206': '설날연휴', '20270207': '설날', '20270208': '설날연휴',
-    '20270209': '대체공휴일', '20270301': '삼일절', '20270303': '대통령선거', '20270505': '어린이날',
-    '20270513': '부처님오신날', '20270606': '현충일', '20270815': '광복절', '20270816': '대체공휴일',
-    '20270914': '추석연휴', '20270915': '추석', '20270916': '추석연휴', '20271003': '개천절',
-    '20271004': '대체공휴일', '20271009': '한글날', '20271011': '대체공휴일', '20271225': '성탄절'
+    '20220101': '신정', '20220131': '설날연휴', '20220201': '설날', '20220202': '설날연휴', '20220301': '삼일절', '20220309': '대통령선거', '20220505': '어린이날', '20220508': '부처님오신날', '20220601': '지방선거', '20220606': '현충일', '20220815': '광복절', '20220909': '추석연휴', '20220910': '추석', '20220911': '추석연휴', '20220912': '대체공휴일', '20221003': '개천절', '20221009': '한글날', '20221010': '대체공휴일', '20221225': '성탄절',
+    '20230101': '신정', '20230121': '설날연휴', '20230122': '설날', '20230123': '설날연휴', '20230124': '대체공휴일', '20230301': '삼일절', '20230505': '어린이날', '20230527': '부처님오신날', '20230529': '대체공휴일', '20230606': '현충일', '20230815': '광복절', '20230928': '추석연휴', '20230929': '추석', '20230930': '추석연휴', '20231002': '임시공휴일', '20231003': '개천절', '20231009': '한글날', '20231225': '성탄절',
+    '20240101': '신정', '20240209': '설날연휴', '20240210': '설날', '20240211': '설날연휴', '20240212': '대체공휴일', '20240301': '삼일절', '20240410': '국회의원선거', '20240505': '어린이날', '20240506': '대체공휴일', '20240515': '부처님오신날', '20240606': '현충일', '20240815': '광복절', '20240916': '추석연휴', '20240917': '추석', '20240918': '추석연휴', '20241001': '임시공휴일(국군의날)', '20241003': '개천절', '20241009': '한글날', '20241225': '성탄절',
+    '20250101': '신정', '20250128': '설날연휴', '20250129': '설날', '20250130': '설날연휴', '20250301': '삼일절', '20250303': '대체공휴일', '20250505': '어린이날', '20250506': '대체공휴일', '20250606': '현충일', '20250815': '광복절', '20251003': '개천절', '20251005': '추석연휴', '20251006': '추석', '20251007': '추석연휴', '20251008': '대체공휴일', '20251009': '한글날', '20251225': '성탄절',
+    '20260101': '신정', '20260216': '설날연휴', '20260217': '설날', '20260218': '설날연휴', '20260301': '삼일절', '20260302': '대체공휴일', '20260505': '어린이날', '20260524': '부처님오신날', '20260525': '대체공휴일', '20260603': '지방선거', '20260606': '현충일', '20260815': '광복절', '20260817': '대체공휴일', '20260924': '추석연휴', '20260925': '추석', '20260926': '추석연휴', '20261003': '개천절', '20261005': '대체공휴일', '20261009': '한글날', '20261225': '성탄절',
+    '20270101': '신정', '20270206': '설날연휴', '20270207': '설날', '20270208': '설날연휴', '20270209': '대체공휴일', '20270301': '삼일절', '20270303': '대통령선거', '20270505': '어린이날', '20270513': '부처님오신날', '20270606': '현충일', '20270815': '광복절', '20270816': '대체공휴일', '20270914': '추석연휴', '20270915': '추석', '20270916': '추석연휴', '20271003': '개천절', '20271004': '대체공휴일', '20271009': '한글날', '20271011': '대체공휴일', '20271225': '성탄절'
 }
 
 def is_korean_holiday_or_weekend(d_str):
     d_obj = datetime.strptime(d_str, "%Y%m%d")
-    if d_obj.weekday() in [5, 6]:
-        return True, "주말"
-    if d_str in korean_holidays:
-        return True, korean_holidays[d_str]
+    if d_obj.weekday() in [5, 6]: return True, "주말"
+    if d_str in korean_holidays: return True, korean_holidays[d_str]
     md = d_str[4:]
-    fixed_holidays = {
-        '0101': '신정', '0301': '삼일절', '0505': '어린이날', '0606': '현충일',
-        '0815': '광복절', '1003': '개천절', '1009': '한글날', '1225': '성탄절'
-    }
-    if md in fixed_holidays:
-        return True, fixed_holidays[md]
-    return False, ""
+    fixed = {'0101':'신정','0301':'삼일절','0505':'어린이날','0606':'현충일','0815':'광복절','1003':'개천절','1009':'한글날','1225':'성탄절'}
+    return (True, fixed[md]) if md in fixed else (False, "")
 
-# 클라이언트 자바스크립트 달력용 공휴일 매핑 객체 { 'YYYY-MM-DD': '명칭' }
 holiday_map_js = {f"{k[:4]}-{k[4:6]}-{k[6:]}": v for k, v in korean_holidays.items()}
 json_holiday_map = json.dumps(holiday_map_js, ensure_ascii=False)
-
 hours = [f"{i}시" for i in range(1, 25)]
 json_hours = json.dumps(hours)
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 
 def format_diff(val):
-    if val > 0:
-        return f"+{abs(val):.2f}원", "text-rose-600"
-    elif val < 0:
-        return f"▼{abs(val):.2f}원", "text-blue-600"
-    else:
-        return "- 0.00원", "text-slate-500"
+    if val > 0: return f"+{abs(val):.2f}원", "text-rose-600"
+    elif val < 0: return f"▼{abs(val):.2f}원", "text-blue-600"
+    else: return "- 0.00원", "text-slate-500"
 
 for target_date_str in common_dates:
     dt = datetime.strptime(target_date_str, "%Y%m%d")
@@ -265,19 +195,11 @@ for target_date_str in common_dates:
     prev_month_smp = monthly_smp_dict.get(prev_ym_str, 0.0)
     
     if lng_price > 0 and prev_lng_price > 0:
-        diff_lng_val = round(lng_price - prev_lng_price, 2)
-        if diff_lng_val > 0:
-            diff_lng_text = f"전월비 +{abs(diff_lng_val):.2f}원"
-            diff_lng_color = "text-rose-600"
-        elif diff_lng_val < 0:
-            diff_lng_text = f"전월비 ▼{abs(diff_lng_val):.2f}원"
-            diff_lng_color = "text-blue-600"
-        else:
-            diff_lng_text = "전월비 변동없음"
-            diff_lng_color = "text-slate-500"
+        d_lng = round(lng_price - prev_lng_price, 2)
+        diff_lng_text = f"전월비 +{abs(d_lng):.2f}원" if d_lng > 0 else (f"전월비 ▼{abs(d_lng):.2f}원" if d_lng < 0 else "전월비 변동없음")
+        diff_lng_color = "text-rose-600" if d_lng > 0 else ("text-blue-600" if d_lng < 0 else "text-slate-500")
     else:
-        diff_lng_text = "-"
-        diff_lng_color = "text-slate-400"
+        diff_lng_text, diff_lng_color = "-", "text-slate-400"
 
     s_info = smp_dict[target_date_str]
     land_smp = s_info['hourly']
@@ -288,18 +210,13 @@ for target_date_str in common_dates:
     min_smp_idx = land_smp.index(min_smp)
     
     s_thresh = min_smp + (max_smp - min_smp) * 0.85
-    left = max_smp_idx
+    left, right = max_smp_idx, max_smp_idx
     while left > 0 and land_smp[left-1] >= s_thresh: left -= 1
-    right = max_smp_idx
     while right < 23 and land_smp[right+1] >= s_thresh: right += 1
-    
     if (right - left) > 6:
         left = max(0, max_smp_idx - 2)
         right = min(23, max_smp_idx + 2)
-        
-    p_start = left
-    p_end = right
-    peak_band_label = f"{p_start+1}~{p_end+1}시"
+    peak_band_label = f"{left+1}~{right+1}시"
     
     g_info = gen_dict[target_date_str]
     c_info = cap_dict[target_date_str]
@@ -316,27 +233,17 @@ for target_date_str in common_dates:
             recent_7.append({
                 'date': f"{p_dt.month}.{p_dt.day}({weekday_kr_list[p_dt.weekday()]})",
                 'is_holiday': p_is_hol,
-                'avg': smp_dict[prev_d]['avg'],
-                'max': smp_dict[prev_d]['max'],
-                'min': smp_dict[prev_d]['min'],
-                'cap': cap_dict[prev_d]['cap'],
-                'peak': cap_dict[prev_d]['peak'],
-                'time': cap_dict[prev_d]['time'],
-                'res': cap_dict[prev_d]['res']
+                'avg': smp_dict[prev_d]['avg'], 'max': smp_dict[prev_d]['max'], 'min': smp_dict[prev_d]['min'],
+                'cap': cap_dict[prev_d]['cap'], 'peak': cap_dict[prev_d]['peak'], 'time': cap_dict[prev_d]['time'], 'res': cap_dict[prev_d]['res']
             })
             
     if len(recent_7) > 1:
-        diff_avg_val = round(avg_smp - recent_7[1]['avg'], 2)
-        diff_max_val = round(max_smp - recent_7[1]['max'], 2)
-        diff_min_val = round(min_smp - recent_7[1]['min'], 2)
-        
-        diff_avg_txt, diff_avg_color = format_diff(diff_avg_val)
-        diff_max_txt, diff_max_color = format_diff(diff_max_val)
-        diff_min_txt, diff_min_color = format_diff(diff_min_val)
+        diff_avg_txt, diff_avg_color = format_diff(round(avg_smp - recent_7[1]['avg'], 2))
+        diff_max_txt, diff_max_color = format_diff(round(max_smp - recent_7[1]['max'], 2))
+        diff_min_txt, diff_min_color = format_diff(round(min_smp - recent_7[1]['min'], 2))
     else:
-        diff_avg_txt, diff_avg_color = "-", "text-slate-400"
-        diff_max_txt, diff_max_color = "-", "text-slate-400"
-        diff_min_txt, diff_min_color = "-", "text-slate-400"
+        diff_avg_txt = diff_max_txt = diff_min_txt = "-"
+        diff_avg_color = diff_max_color = diff_min_color = "text-slate-400"
     
     table_rows_html = ""
     for i, r in enumerate(recent_7):
@@ -362,10 +269,11 @@ for target_date_str in common_dates:
       <li><strong>전원구성 :</strong> 기저발전(원자력·석탄) 안정적 발전 지속, 주간 태양광 출력 집중으로 순부하 최저 형성 후 저녁 피크 시 LNG 및 양수·ESS 가동 대응</li>
     </ul>
     """
-    ai_gen_summary = f"주간 태양광 발전량 증가로 순부하 최저점을 형성하였으며, 일몰 후 저녁 피크 램핑 수요를 LNG 및 양수/ESS가 안정적으로 전담함."
+    ai_gen_summary = "주간 태양광 발전량 증가로 순부하 최저점을 형성하였으며, 일몰 후 저녁 피크 램핑 수요를 LNG 및 양수/ESS가 안정적으로 전담함."
 
+    # 최신 버튼 링크를 무조건 index.html로 영구 고정
     latest_button_html = f"""
-      <a href="daily_report_{latest_date_str}.html" 
+      <a href="index.html" 
          class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition" title="확정된 가장 최근 실적일로 이동">
         <span>⚡ 최신 실적({latest_dt.strftime('%m.%d')})으로</span> &rarr;
       </a>
@@ -380,12 +288,9 @@ for target_date_str in common_dates:
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
-  
-  <!-- Flatpickr 커스텀 달력 및 한글 로케일 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -398,40 +303,18 @@ for target_date_str in common_dates:
     .text-holiday {{ color: #dc2626 !important; font-weight: 700; }}
     h2 {{ font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }}
     .summary-box li {{ margin-bottom: 0.5rem; }}
-
-    /* 달력 팝업 내 일요일, 토요일, 대한민국 공휴일 빨간색 강제 스타일링 */
     .flatpickr-calendar {{ border: 1px solid #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); }}
     .flatpickr-calendar .flatpickr-day.holiday-day,
-    .flatpickr-calendar .flatpickr-day.weekend-day {{
-      color: #dc2626 !important;
-      font-weight: 700 !important;
-    }}
-    .flatpickr-calendar .flatpickr-day.holiday-day::after {{
-      content: '';
-      position: absolute;
-      bottom: 3px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background-color: #dc2626;
-    }}
+    .flatpickr-calendar .flatpickr-day.weekend-day {{ color: #dc2626 !important; font-weight: 700 !important; }}
+    .flatpickr-calendar .flatpickr-day.holiday-day::after {{ content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background-color: #dc2626; }}
     .flatpickr-calendar .flatpickr-day.selected.holiday-day,
-    .flatpickr-calendar .flatpickr-day.selected.weekend-day {{
-      background: #001f3f !important;
-      color: #ffffff !important;
-    }}
+    .flatpickr-calendar .flatpickr-day.selected.weekend-day {{ background: #001f3f !important; color: #ffffff !important; }}
     .flatpickr-calendar .flatpickr-weekday:first-child,
-    .flatpickr-calendar .flatpickr-weekday:last-child {{
-      color: #dc2626 !important;
-      font-weight: 700;
-    }}
+    .flatpickr-calendar .flatpickr-weekday:last-child {{ color: #dc2626 !important; font-weight: 700; }}
   </style>
 </head>
 <body class="p-4 md:p-8">
   <div class="max-w-6xl mx-auto space-y-8">
-    <!-- 헤더 영역 -->
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
@@ -442,27 +325,27 @@ for target_date_str in common_dates:
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 실시간 바로가기:</span>
           <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition" title="KPX 실시간 발전원별 수급현황">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs transition">
             <span>⚡ 실시간 수급현황</span>
             <svg class="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
           <a href="https://new.kpx.or.kr/smpInland.es?mid=a10404080100&device=pc" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition" title="KPX 당일 시간대별 SMP">
+             class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs transition">
             <span>📈 실시간 SMP</span>
             <svg class="w-3 h-3 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          {latest_button_html}
-          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-            <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
-            <div class="relative flex items-center">
-              <input type="text" id="historyDate" value="{target_date_dashed}" 
-                     class="bg-transparent text-xs md:text-sm font-bold {date_color_cls} outline-none cursor-pointer w-28 pr-6 text-center" readonly>
-              <svg class="w-4 h-4 text-slate-500 absolute right-1 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-            </div>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded border {badge_color_cls}" {badge_title}>({w_kr})</span>
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+          <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
+          <div class="relative flex items-center">
+            <input type="text" id="historyDate" value="{target_date_dashed}" 
+                   class="bg-transparent text-xs md:text-sm font-bold {date_color_cls} outline-none cursor-pointer w-28 pr-6 text-center" readonly>
+            <svg class="w-4 h-4 text-slate-500 absolute right-1 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <span class="text-xs font-bold px-1.5 py-0.5 rounded border {badge_color_cls}" {badge_title}>({w_kr})</span>
+          <div class="ml-2 pl-2 border-l border-slate-200">
+            {latest_button_html}
           </div>
         </div>
       </div>
@@ -586,7 +469,6 @@ for target_date_str in common_dates:
   <script>
     const holidayMap = {json_holiday_map};
 
-    // Flatpickr 커스텀 달력 초기화 (팝업 내 주말 및 공휴일 빨간색 적용)
     flatpickr("#historyDate", {{
       locale: "ko",
       dateFormat: "Y-m-d",
@@ -597,9 +479,7 @@ for target_date_str in common_dates:
       onDayCreate: function(dObj, dStr, fp, dayElem) {{
         const dateStr = flatpickr.formatDate(dayElem.dateObj, "Y-m-d");
         const dayOfWeek = dayElem.dateObj.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {{
-          dayElem.classList.add("weekend-day");
-        }}
+        if (dayOfWeek === 0 || dayOfWeek === 6) dayElem.classList.add("weekend-day");
         if (holidayMap[dateStr]) {{
           dayElem.classList.add("holiday-day");
           dayElem.setAttribute("title", holidayMap[dateStr]);
@@ -609,8 +489,8 @@ for target_date_str in common_dates:
         if (!dateStr) return;
         const latest = "{latest_date_dashed}";
         if (dateStr > latest) {{
-          alert("오늘 실시간 수급현황 및 SMP는 상단의 [KPX 실시간 바로가기] 버튼을 통해 확인하실 수 있습니다.\\n\\n일일 종합 분석 리포트는 24시간 마감 후 익일 아침 발행됩니다. 확정 최신일(" + latest + ")로 이동합니다.");
-          window.location.href = "daily_report_{latest_date_str}.html";
+          alert("아직 실적이 확정되지 않은 날짜입니다.\\n가장 최신 확정일(" + latest + ")로 이동합니다.");
+          window.location.href = "index.html";
           return;
         }}
         window.location.href = "daily_report_" + dateStr.replace(/-/g, '') + ".html";
@@ -618,9 +498,7 @@ for target_date_str in common_dates:
     }});
 
     Chart.register(window['chartjs-plugin-annotation']);
-    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {{
-      return eventPosition ? {{ x: eventPosition.x, y: eventPosition.y }} : false;
-    }};
+    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) {{ return eventPosition ? {{ x: eventPosition.x, y: eventPosition.y }} : false; }};
     const crosshairPlugin = {{
       id: 'crosshair',
       afterDraw: chart => {{
@@ -650,63 +528,38 @@ for target_date_str in common_dates:
       plugins: {{
         legend: {{ 
           labels: {{ 
-            usePointStyle: true, 
-            font: {{ family: 'Noto Sans KR', size: 12 }},
+            usePointStyle: true, font: {{ family: 'Noto Sans KR', size: 12 }},
             generateLabels: function(chart) {{
               const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
               original.forEach(label => {{
                 const ds = chart.data.datasets[label.datasetIndex];
-                if (ds && ds.borderDash) {{
-                  label.lineDash = ds.borderDash;
-                }}
+                if (ds && ds.borderDash) label.lineDash = ds.borderDash;
               }});
               return original;
             }}
           }} 
         }},
         tooltip: {{
-          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1,
-          padding: 10, boxPadding: 4, usePointStyle: true,
-          titleFont: {{ family: 'Noto Sans KR', size: 13, weight: 'bold' }},
-          bodyFont: {{ family: 'Noto Sans KR', size: 12 }}
+          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true, titleFont: {{ family: 'Noto Sans KR', size: 13, weight: 'bold' }}, bodyFont: {{ family: 'Noto Sans KR', size: 12 }}
         }}
       }},
-      scales: {{ 
-        x: {{ grid: {{ display: false }} }}, 
-        y: {{ 
-          grid: {{ color: '#f1f5f9' }},
-          grace: '20%'
-        }} 
-      }}
+      scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }}, grace: '20%' }} }}
     }};
 
     const dynamicPeakAnnotation = {{
-      type: 'box', xMin: {p_start}, xMax: {p_end},
-      backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
+      type: 'box', xMin: {left}, xMax: {right}, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0,
       label: {{ display: true, content: '{peak_band_label} 피크', position: 'top', color: '#d93f3c', font: {{size: 11, weight: 'bold'}} }}
     }};
 
-    // 02. SMP 차트
     new Chart(document.getElementById('smpChart'), {{
       type: 'line',
       data: {{
         labels: labels,
-        datasets: [{{
-          label: '시간대별 SMP (원/kWh)', data: {json.dumps(land_smp)}, pointStyle: 'line',
-          borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1
-        }}]
+        datasets: [{{ label: '시간대별 SMP (원/kWh)', data: {json.dumps(land_smp)}, pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1 }}]
       }},
       options: {{
         ...commonOptions,
-        scales: {{
-          x: {{ grid: {{ display: false }} }},
-          y: {{ 
-            grid: {{ color: '#f1f5f9' }},
-            title: {{ display: true, text: '원/kWh' }},
-            grace: '20%'
-          }}
-        }},
+        scales: {{ x: {{ grid: {{ display: false }} }}, y: {{ grid: {{ color: '#f1f5f9' }}, title: {{ display: true, text: '원/kWh' }}, grace: '20%' }} }},
         plugins: {{
           ...commonOptions.plugins,
           annotation: {{
@@ -722,7 +575,6 @@ for target_date_str in common_dates:
       }}
     }});
 
-    // 04. 발전원별 구성 차트
     new Chart(document.getElementById('generationChart'), {{
       type: 'line',
       data: {{
@@ -742,16 +594,9 @@ for target_date_str in common_dates:
           {{ label: 'ESS충전', data: {json.dumps(g_info['ess_chg'])}, backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area_stack' }}
         ]
       }},
-      options: {{ 
-        ...commonOptions, 
-        scales: {{ 
-          x: {{ stacked: true, grid: {{ display: false }} }}, 
-          y: {{ stacked: true, grace: '10%' }} 
-        }} 
-      }}
+      options: {{ ...commonOptions, scales: {{ x: {{ stacked: true, grid: {{ display: false }} }}, y: {{ stacked: true, grace: '10%' }} }} }}
     }});
 
-    // 05. 주요 발전원 라인 차트
     new Chart(document.getElementById('sourceLineChart'), {{
       type: 'line',
       data: {{
@@ -765,7 +610,6 @@ for target_date_str in common_dates:
       options: {{ ...commonOptions, plugins: {{ ...commonOptions.plugins, annotation: {{ annotations: {{ box1: dynamicPeakAnnotation }} }} }} }}
     }});
 
-    // 06. SMP 스프레드 차트
     new Chart(document.getElementById('spreadChart'), {{
       type: 'line',
       data: {{
@@ -779,48 +623,17 @@ for target_date_str in common_dates:
         ...commonOptions,
         scales: {{
           x: {{ grid: {{ display: false }} }},
-          y: {{ 
-            type: 'linear', 
-            display: true, 
-            position: 'left', 
-            title: {{ display: true, text: 'MW' }},
-            grace: '15%'
-          }},
-          y1: {{ 
-            type: 'linear', 
-            display: true, 
-            position: 'right', 
-            grid: {{ drawOnChartArea: false }}, 
-            title: {{ display: true, text: '원/kWh' }},
-            grace: '20%'
-          }}
+          y: {{ type: 'linear', display: true, position: 'left', title: {{ display: true, text: 'MW' }}, grace: '15%' }},
+          y1: {{ type: 'linear', display: true, position: 'right', grid: {{ drawOnChartArea: false }}, title: {{ display: true, text: '원/kWh' }}, grace: '20%' }}
         }},
         plugins: {{
           ...commonOptions.plugins,
           annotation: {{
             annotations: {{
-              spreadMaxPt: {{ 
-                type: 'point', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: {max_smp_idx}, yValue: {max_smp}, 
-                backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' 
-              }},
-              spreadMaxLbl: {{ 
-                type: 'label', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: {max_smp_idx}, yValue: {max_smp}, 
-                content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], 
-                font: {{ size: 10, weight: 'bold' }}, color: '#d93c39', yAdjust: -14 
-              }},
-              spreadMinPt: {{ 
-                type: 'point', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: {min_smp_idx}, yValue: {min_smp}, 
-                backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' 
-              }},
-              spreadMinLbl: {{ 
-                type: 'label', xScaleID: 'x', yScaleID: 'y1', 
-                xValue: {min_smp_idx}, yValue: {min_smp}, 
-                content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], 
-                font: {{ size: 10, weight: 'bold' }}, color: '#005587', yAdjust: -14 
-              }}
+              spreadMaxPt: {{ type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: {max_smp_idx}, yValue: {max_smp}, backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' }},
+              spreadMaxLbl: {{ type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: {max_smp_idx}, yValue: {max_smp}, content: ['최고 ' + Number({max_smp}).toFixed(2) + '원'], font: {{ size: 10, weight: 'bold' }}, color: '#d93c39', yAdjust: -14 }},
+              spreadMinPt: {{ type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: {min_smp_idx}, yValue: {min_smp}, backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' }},
+              spreadMinLbl: {{ type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: {min_smp_idx}, yValue: {min_smp}, content: ['최저 ' + Number({min_smp}).toFixed(2) + '원'], font: {{ size: 10, weight: 'bold' }}, color: '#005587', yAdjust: -14 }}
             }}
           }}
         }}
@@ -830,8 +643,12 @@ for target_date_str in common_dates:
 </body>
 </html>
 """
+    
     filename = f"daily_report_{target_date_str}.html"
     with open(filename, "w", encoding="utf-8") as f:
         f.write(html_content)
 
-print(f">> 완료: 총 {len(common_dates)}개의 리포트 HTML 파일이 생성되었습니다.")
+# 최종적으로 가장 최신 날짜의 HTML 파일을 index.html로 복사하여 메인 페이지를 덮어씁니다.
+shutil.copyfile(f"daily_report_{latest_date_str}.html", "index.html")
+
+print(f">> 완료: 총 {len(common_dates)}개의 리포트 생성 및 index.html(기준일: {latest_date_str}) 업데이트 배포 완료")
