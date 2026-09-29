@@ -2,9 +2,9 @@ name: Daily Report Automation
 
 on:
   schedule:
-    # 매일 한국시간 08:30 (UTC 23:30) 자동 실행
+    # 매일 한국 시간 08:30 (UTC 기준 전일 23:30) 자동 실행
     - cron: '30 23 * * *'
-  workflow_dispatch: # 수동 실행 버튼 활성화
+  workflow_dispatch: # Actions 탭에서 수동 실행 버튼 활성화
 
 permissions:
   contents: write
@@ -27,24 +27,22 @@ jobs:
         run: |
           pip install pandas openpyxl requests
 
-      - name: Generate Master data.json (First Run or API update)
+      - name: Generate Master data.json (Full Historical & Daily Update)
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: |
-          # data.json이 없으면 엑셀 기반으로 2022~현재 전체 생성, 있으면 일일 업데이트 실행
-          if [ ! -f "data.json" ]; then
-            python backfill_generator.py
-          else
-            python build_report.py
-          fi
+          # 1. 과거 전체(2022~현재) 월별 LNG 단가 및 실적을 정확히 data.json에 생성/재반영
+          python backfill_generator.py
+          # 2. 최신 전일 실적(SMP 및 지표) 추가 갱신
+          python build_report.py
 
       - name: Cleanup Old HTMLs and Commit SPA
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # 불필요한 과거 1,700여 개 개별 HTML 일괄 삭제
+          # 저장소를 어지럽히던 과거 1,700여 개 개별 HTML 파일 일괄 정리
           git rm -f daily_report_*.html 2>/dev/null || true
           git add index.html data.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto: Update SPA data.json [$(date +'%Y-%m-%d')]"
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto: Update SPA master data.json [$(date +'%Y-%m-%d')]"
           git pull --rebase origin main
           git push origin main
