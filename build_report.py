@@ -1,6 +1,6 @@
 import os
 import json
-import subprocess
+import requests
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -8,8 +8,11 @@ print(">> SPA master data.json 일일 업데이트 시작...")
 
 DATA_FILE = "data.json"
 
-# 🚨 저의 치명적인 오타를 제거하고, 100% 정상 작동하는 원본 API 키로 강제 고정
-CORRECT_KEY = "23c70f6d2903b2c4ef940ed8f9bfbf97f8d36d3194aabba3251666d4f053feb3"
+# 인증키는 코드에 적지 않고 GitHub Secret(DATA_GO_KR_KEY)에서만 읽음 (공개 저장소이므로 코드에 키 기재 금지)
+API_KEY = os.environ.get("DATA_GO_KR_KEY", "").strip()
+if not API_KEY:
+    print("🚨 DATA_GO_KR_KEY 가 비어 있습니다. GitHub 저장소 Settings > Secrets and variables > Actions 에 등록하세요.")
+    sys.exit(1)
 
 if not os.path.exists(DATA_FILE):
     raise FileNotFoundError("data.json 파일이 없습니다.")
@@ -96,38 +99,91 @@ if "20260928" not in master["days"]:
         json.dump(master, f, ensure_ascii=False)
     print(">> [복구] 28일 데이터 정상 디스크 기록 완료.")
 
-# 2. 29일 실시간 수집 (curl 강제 우회)
-def fetch_api_smp_curl(trade_date):
-    url = f"https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemandList?serviceKey={CORRECT_KEY}&pageNo=1&numOfRows=30&tradeDate={trade_date}&dataType=JSON"
-    print(f">> [API 호출] {trade_date} 데이터를 curl로 강제 요청합니다.")
-    try:
-        res = subprocess.run(['curl', '-s', '-k', '-H', 'User-Agent: Mozilla/5.0', url], capture_output=True, text=True, timeout=20)
-        if res.returncode == 0 and res.stdout:
-            data = json.loads(res.stdout)
-            items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
-            if items:
-                items = sorted(items, key=lambda x: int(x.get('tradeHour', x.get('hour', 0))))
-                hourly = [float(x.get('smp', x.get('landSmp', 0))) for x in items if int(x.get('tradeHour', x.get('hour', 0))) in range(1, 25)]
-                if len(hourly) == 24:
-                    print(f"✅ {trade_date} 데이터 24시간 분량 완벽 수집 성공!")
-                    return hourly
-            print(f">> [API 데이터 파싱 실패]: {res.stdout[:200]}")
-    except Exception as e:
-        print(f">> [시스템 에러]: {e}")
-    return None
+# 2. 전일 SMP 수집 (한국전력거래소_계통한계가격 및 수요예측, 공공데이터포털)
+API_URL = "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemand"
 
-api_smp = fetch_api_smp_curl(target_date_str)
+
+def fetch_land_smp(trade_date):
+    """해당 일자 육지 SMP 24시간 리스트를 반환. 실패 시 None (원인은 로그에 출력)."""
+    params = {"serviceKey": API_KEY, "pageNo": 1, "numOfRows": 100, "dataType": "json", "date": trade_date}
+    print(f">> [API 호출] {trade_date} 육지 SMP 수집 중...")
+    try:
+        resp = requests.get(API_URL, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+    except Exception as e:
+        print(f">> [통신 에러] {e}")
+        return None
+    print(f">> [API 상태] HTTP {resp.status_code}")
+    try:
+        data = resp.json()
+    except ValueError:
+        print(">> [응답 형식 오류] JSON이 아님:", resp.text[:300].replace(API_KEY, "***"))
+        return None
+
+    root = data.get("response", data) if isinstance(data, dict) else {}
+    header = root.get("header", {}) if isinstance(root, dict) else {}
+    body = root.get("body", {}) if isinstance(root, dict) else {}
+    print(f">> [API 결과] code={header.get('resultCode')} msg={header.get('resultMsg')} totalCount={body.get('totalCount')}")
+
+    items = body.get("items", {}) if isinstance(body, dict) else {}
+    if isinstance(items, dict):
+        items = items.get("item", [])
+    if isinstance(items, dict):
+        items = [items]
+    if not isinstance(items, list) or not items:
+        print(">> [데이터 없음] 응답 일부:", str(data)[:300].replace(API_KEY, "***"))
+        return None
+
+    areas = sorted({str(x.get("areaName", "")) for x in items})
+    print(f">> [지역 구분] {areas}")
+    land = [x for x in items if "육지" in str(x.get("areaName", ""))]
+    if not land:
+        print(">> [지역 오류] 육지 행을 찾지 못했습니다.")
+        return None
+
+    by_hour = {}
+    for x in land:
+        try:
+            by_hour[int(x["hour"])] = float(x["smp"])
+        except (KeyError, ValueError, TypeError):
+            continue
+    hours = sorted(by_hour)
+    if hours != list(range(1, 25)) and hours != list(range(0, 24)):
+        print(f">> [시간 오류] 24시간이 모두 있지 않습니다. 수신 시간대: {hours}")
+        return None
+    return [by_hour[h] for h in hours]
+
+
+def report_check_vs_master(smp_list, d_str):
+    """API 값이 기존 확정값(KPX 파일 기반)과 같은지 로그로만 확인 (실패 처리 안 함)."""
+    old = master["days"].get(d_str, {}).get("smp_hourly")
+    if not old or len(old) != 24:
+        return
+    diff = max(abs(a - b) for a, b in zip(smp_list, old))
+    if diff < 0.01:
+        print(f">> [검증] {d_str} API 값이 기존 확정값과 일치합니다.")
+    else:
+        print(f">> [검증 주의] {d_str} API 값이 기존 확정값과 다릅니다 (최대 차이 {diff:.2f}원). 하루 전 계획값일 수 있습니다.")
+
+
+api_smp = fetch_land_smp(target_date_str)
 
 if not api_smp:
-    print(f"🚨 최신 실적 수집 실패. 에러 없이 28일 복구본까지만 저장 후 안전하게 종료합니다.")
-    sys.exit(0)
+    print(f"🚨 {target_date_str} SMP 수집 실패. 위 로그의 원인을 확인하세요. (data.json은 변경하지 않음)")
+    sys.exit(1)
 
-# 3. API 정상 수집 시 29일 최신 데이터 확정 저장
-prev_day = master["days"].get((target_dt - timedelta(days=1)).strftime("%Y%m%d"), {})
+# 전일 값 검증(로그 전용)
+prev_date_str = (target_dt - timedelta(days=1)).strftime("%Y%m%d")
+prev_api = fetch_land_smp(prev_date_str)
+if prev_api:
+    report_check_vs_master(prev_api, prev_date_str)
+
+# 3. 수집 성공 시 저장
+prev_day = master["days"].get(prev_date_str, {})
 master["days"][target_date_str] = build_day_payload(target_date_str, api_smp, prev_day)
 master["latest_date"] = target_date_str
 
 with open(DATA_FILE, "w", encoding="utf-8") as f:
     json.dump(master, f, ensure_ascii=False)
 
-print(f"🎉 성공! {target_date_str} 실적 대시보드 반영 완료!")
+print(f"🎉 {target_date_str} SMP 반영 완료")
+print(">> [참고] 발전원별 발전량·최대부하·공급예비율·LNG 단가는 아직 전일 값을 유지합니다 (다음 단계에서 API 연동).")
