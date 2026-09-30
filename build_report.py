@@ -1,5 +1,8 @@
 import os
 import json
+import subprocess
+import time
+import urllib.parse
 import requests
 import sys
 from datetime import datetime, timedelta, timezone
@@ -103,20 +106,53 @@ if "20260928" not in master["days"]:
 API_URL = "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemand"
 
 
-def fetch_land_smp(trade_date):
+def http_get_text(params, attempts=3, use_curl_fallback=True):
+    """API 호출. 접속 시간 초과 등 통신 오류는 대기 후 재시도하고, 마지막에 curl(IPv4)로도 시도.
+    (status, text) 를 반환하며 끝내 실패하면 None."""
+    last = None
+    for i in range(1, attempts + 1):
+        try:
+            r = requests.get(API_URL, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 60))
+            if r.status_code < 500 and r.status_code != 429:
+                return r.status_code, r.text
+            last = f"HTTP {r.status_code}"
+        except Exception as e:
+            last = f"{type(e).__name__}"
+        print(f">> [통신 실패 {i}/{attempts}] {last}")
+        if i < attempts:
+            time.sleep(10 * i)
+
+    if use_curl_fallback:
+        print(">> [대체 호출] curl(IPv4)로 재시도합니다.")
+        url = API_URL + "?" + urllib.parse.urlencode(params)
+        try:
+            res = subprocess.run(
+                ["curl", "-sS", "-4", "--connect-timeout", "20", "--max-time", "60",
+                 "-H", "User-Agent: Mozilla/5.0", "-w", "\n%{http_code}", url],
+                capture_output=True, text=True, timeout=90)
+            if res.returncode == 0 and res.stdout:
+                body, _, code = res.stdout.rpartition("\n")
+                return int(code or 0), body
+            print(f">> [curl 실패] exit={res.returncode} {res.stderr[:200].replace(API_KEY, '***')}")
+        except Exception as e:
+            print(f">> [curl 에러] {type(e).__name__}")
+    return None
+
+
+def fetch_land_smp(trade_date, attempts=3, use_curl_fallback=True):
     """해당 일자 육지 SMP 24시간 리스트를 반환. 실패 시 None (원인은 로그에 출력)."""
     params = {"serviceKey": API_KEY, "pageNo": 1, "numOfRows": 100, "dataType": "json", "date": trade_date}
     print(f">> [API 호출] {trade_date} 육지 SMP 수집 중...")
-    try:
-        resp = requests.get(API_URL, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-    except Exception as e:
-        print(f">> [통신 에러] {e}")
+    got = http_get_text(params, attempts, use_curl_fallback)
+    if got is None:
+        print(f">> [통신 에러] {trade_date} 호출이 모든 시도에서 실패했습니다.")
         return None
-    print(f">> [API 상태] HTTP {resp.status_code}")
+    status, text = got
+    print(f">> [API 상태] HTTP {status}")
     try:
-        data = resp.json()
+        data = json.loads(text)
     except ValueError:
-        print(">> [응답 형식 오류] JSON이 아님:", resp.text[:300].replace(API_KEY, "***"))
+        print(">> [응답 형식 오류] JSON이 아님:", text[:300].replace(API_KEY, "***"))
         return None
 
     root = data.get("response", data) if isinstance(data, dict) else {}
@@ -173,9 +209,11 @@ if not api_smp:
 
 # 전일 값 검증(로그 전용)
 prev_date_str = (target_dt - timedelta(days=1)).strftime("%Y%m%d")
-prev_api = fetch_land_smp(prev_date_str)
+prev_api = fetch_land_smp(prev_date_str, attempts=1, use_curl_fallback=False)
 if prev_api:
     report_check_vs_master(prev_api, prev_date_str)
+else:
+    print(">> [검증 생략] 전일 비교용 호출이 실패하여 확정값 비교는 건너뜁니다.")
 
 # 3. 수집 성공 시 저장
 prev_day = master["days"].get(prev_date_str, {})
