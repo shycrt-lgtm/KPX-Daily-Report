@@ -247,7 +247,85 @@ def prev_month_smp_str(d_str):
     return f"{sum(vals) / len(vals):.2f}원/kWh" if vals else "-"
 
 
-def build_day_payload(d_str, land_smp, prev_day_data):
+# ---------------------------------------------------------------------------
+# 전일 전력수급실적: 한국전력거래소(KPX) '전일 전력수급실적' 표 (공급능력·최대전력·발생시각·예비율)
+# ---------------------------------------------------------------------------
+KPX_URL = "https://kpx.or.kr/powerDemandPerform.es?mid=a10404060000"
+
+
+def _num(s):
+    return float(re.sub(r"[^0-9.\-]", "", s))
+
+
+def parse_kpx_supply_demand(html):
+    """표의 각 행을 {YYYYMMDD: {'cap','peak','time','res'}} 로 반환 (표에는 최근 10일이 표시됨).
+    열 순서: 번호 | 일시 | 설비용량 | 공급능력 | 최대전력(전년·금년·증가율·시간대) | 최소전력(금년·시간대) | 공급예비력 | 예비율"""
+    p = _TableParser()
+    p.feed(html)
+    out = {}
+    for tbl in p.tables:
+        for row in tbl:
+            if len(row) < 12:
+                continue
+            m = re.fullmatch(r"(\d{4})\.(\d{2})\.(\d{2})", row[1])
+            if not m:
+                continue
+            d = m.group(1) + m.group(2) + m.group(3)
+            try:
+                cap, peak, reserve, res = _num(row[3]), _num(row[5]), _num(row[10]), _num(row[11])
+                hh = int(re.search(r"(\d{1,2})", row[7]).group(1))
+            except (ValueError, AttributeError):
+                print(f">> [전력수급 파싱 실패] {d} 행의 숫자를 읽지 못했습니다: {row}")
+                continue
+            # 열이 어긋났는지 검증: 공급능력-최대전력=공급예비력, 예비율=공급예비력/최대전력
+            if abs((cap - peak) - reserve) > 1.5 or peak <= 0 or abs(res - reserve / peak * 100) > 0.2:
+                print(f">> [전력수급 검증 실패] {d} 값이 서로 맞지 않아 제외합니다: 공급능력={cap}, 최대전력={peak}, 예비력={reserve}, 예비율={res}")
+                continue
+            out[d] = {"cap": int(cap), "peak": int(peak), "time": f"{hh:02d}:00", "res": res}
+    return out
+
+
+def fetch_kpx_supply_demand():
+    print(">> [전력수급] KPX 전일 전력수급실적 조회 중...")
+    got = http_get(KPX_URL, attempts=2)
+    if got is None:
+        print(">> [전력수급 경고] KPX 페이지에 접속하지 못했습니다.")
+        return {}
+    status, text = got
+    print(f">> [전력수급 상태] HTTP {status}")
+    rows = parse_kpx_supply_demand(text)
+    if rows:
+        print(f">> [전력수급] {len(rows)}일 확보 ({min(rows)}~{max(rows)})")
+    else:
+        print(">> [전력수급 경고] 표를 읽지 못했습니다.")
+    return rows
+
+
+def _day_cap(info):
+    """일별 데이터의 공급능력(MW): 저장된 값 → 그날 recent_7 첫 항목 → 기본값."""
+    if info.get("cap_cap"):
+        return info["cap_cap"]
+    r7 = info.get("recent_7") or [{}]
+    return r7[0].get("cap") or 91000
+
+
+def repair_days_with_kpx(kpx_rows, skip_date):
+    """이미 저장된 날짜 중 KPX 실적과 다른 값(예: 전일 값이 복사된 날)을 실적으로 바로잡음."""
+    for d in sorted(kpx_rows):
+        day = master["days"].get(d)
+        if not day or d == skip_date:
+            continue
+        k = kpx_rows[d]
+        same = (day.get("cap_peak") == k["peak"] and day.get("cap_time") == k["time"]
+                and day.get("cap_res") == k["res"] and _day_cap(day) == k["cap"])
+        if same:
+            continue
+        print(f">> [전력수급 보정] {d}: 최대전력 {day.get('cap_peak')}→{k['peak']}MW, 예비율 {day.get('cap_res')}→{k['res']}%")
+        master["days"][d] = build_day_payload(d, day["smp_hourly"], {"gen": day.get("gen", default_gen)}, cap=k)
+
+
+def build_day_payload(d_str, land_smp, prev_day_data, cap=None):
+    """cap: KPX 전력수급실적 {'cap','peak','time','res'}. 없으면 전일 값을 임시로 유지(로그로 경고)."""
     d_dt = datetime.strptime(d_str, "%Y%m%d").replace(tzinfo=KST)
     smp_avg = round(sum(land_smp)/24, 2)
     smp_max = round(max(land_smp), 2)
@@ -261,11 +339,19 @@ def build_day_payload(d_str, land_smp, prev_day_data):
     while right < 23 and land_smp[right+1] >= thresh: right += 1
     if (right - left) > 6: left = max(0, max_idx - 2); right = min(23, max_idx + 2)
 
+    if cap:
+        cap_cap, cap_peak, cap_time, cap_res = cap["cap"], cap["peak"], cap["time"], cap["res"]
+    else:
+        cap_cap = _day_cap(prev_day_data)
+        cap_peak = prev_day_data.get("cap_peak", 68420)
+        cap_time = prev_day_data.get("cap_time", "19:00")
+        cap_res = prev_day_data.get("cap_res", 36.8)
+
     recent_7 = [{
         'date': f"{d_dt.month}.{d_dt.day}({weekday_kr_list[d_dt.weekday()]})",
         'is_holiday': d_dt.weekday() in [5, 6] or d_str in master["holidays"],
         'avg': smp_avg, 'max': smp_max, 'min': smp_min,
-        'cap': prev_day_data.get("cap_peak", 68420) + 20000, 'peak': prev_day_data.get("cap_peak", 68420), 'time': prev_day_data.get("cap_time", "19:00"), 'res': prev_day_data.get("cap_res", 36.8)
+        'cap': cap_cap, 'peak': cap_peak, 'time': cap_time, 'res': cap_res
     }]
     for delta in range(1, 7):
         p_dt = d_dt - timedelta(days=delta)
@@ -276,7 +362,7 @@ def build_day_payload(d_str, land_smp, prev_day_data):
                 'date': f"{p_dt.month}.{p_dt.day}({weekday_kr_list[p_dt.weekday()]})",
                 'is_holiday': p_dt.weekday() in [5, 6] or p_k in master["holidays"],
                 'avg': p_info["smp_avg"], 'max': p_info["smp_max"], 'min': p_info["smp_min"],
-                'cap': p_info.get("cap_cap", 91000), 'peak': p_info["cap_peak"], 'time': p_info["cap_time"], 'res': p_info["cap_res"]
+                'cap': _day_cap(p_info), 'peak': p_info["cap_peak"], 'time': p_info["cap_time"], 'res': p_info["cap_res"]
             })
 
     diff_avg_val = round(smp_avg - recent_7[1]["avg"], 2) if len(recent_7) > 1 else 0.0
@@ -297,7 +383,7 @@ def build_day_payload(d_str, land_smp, prev_day_data):
     return {
         'smp_hourly': land_smp, 'smp_avg': smp_avg, 'smp_max': smp_max, 'smp_min': smp_min,
         'smp_max_idx': max_idx, 'smp_min_idx': min_idx, 'peak_band': f"{left+1}~{right+1}시", 'peak_left': left, 'peak_right': right,
-        'cap_peak': prev_day_data.get("cap_peak", 68420), 'cap_time': prev_day_data.get("cap_time", "19:00"), 'cap_res': prev_day_data.get("cap_res", 36.8),
+        'cap_cap': cap_cap, 'cap_peak': cap_peak, 'cap_time': cap_time, 'cap_res': cap_res,
         'lng_price': lng_price, 'diff_lng_text': diff_lng_text, 'diff_lng_color': diff_lng_color, 'prev_smp_str': prev_month_smp_str(d_str),
         'diff_avg_txt': diff_avg_txt, 'diff_avg_color': diff_avg_color,
         'diff_max_txt': diff_max_txt, 'diff_max_color': diff_max_color,
@@ -407,12 +493,21 @@ else:
     print(">> [검증 생략] 전일 비교용 호출이 실패하여 확정값 비교는 건너뜁니다.")
 
 # 3. 수집 성공 시 저장
+# 3-1. 전일 전력수급실적(KPX): 이미 저장된 날짜 중 실적과 다른 값 보정 → 대상일에 반영
+kpx_rows = fetch_kpx_supply_demand()
+cap_target = kpx_rows.get(target_date_str)
+if not cap_target:
+    print(f">> [전력수급 경고] {target_date_str} 실적이 표에서 확인되지 않아 최대전력·예비율은 전일 값을 임시로 유지합니다.")
+repair_days_with_kpx(kpx_rows, skip_date=target_date_str)
+
 prev_day = master["days"].get(prev_date_str, {})
-master["days"][target_date_str] = build_day_payload(target_date_str, api_smp, prev_day)
+master["days"][target_date_str] = build_day_payload(target_date_str, api_smp, prev_day, cap=cap_target)
 master["latest_date"] = target_date_str
 
 with open(DATA_FILE, "w", encoding="utf-8") as f:
     json.dump(master, f, ensure_ascii=False)
 
 print(f"🎉 {target_date_str} SMP 반영 완료")
-print(">> [참고] 발전원별 발전량·최대부하·공급예비율은 아직 전일 값을 유지합니다 (다음 단계에서 API 연동).")
+if cap_target:
+    print(f">> [전력수급] {target_date_str} 공급능력 {cap_target['cap']:,}MW, 최대전력 {cap_target['peak']:,}MW({cap_target['time']}), 예비율 {cap_target['res']}% 반영")
+print(">> [참고] 발전원별 발전량은 아직 전일 값을 유지합니다 (다음 단계에서 API 연동).")
