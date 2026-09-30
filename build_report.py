@@ -381,7 +381,7 @@ def build_day_payload(d_str, land_smp, prev_day_data, cap=None, smp_avg=None, av
         payload['smp_basis'] = avg_basis
     if gen_info:
         payload['gen'] = gen_info['gen']
-        payload['gen_src'] = 'api'
+        payload['gen_src'] = gen_info.get('src', 'api')
         payload['gen_note'] = gen_info.get('note', '')
     return payload
 
@@ -674,6 +674,121 @@ def build_gen_updates(need_days, vday):
         return {}
 
 
+# ---------------------------------------------------------------------------
+# 발전원별 발전량(1순위): KPX '발전원별 실시간 전력수급' 페이지 (과거 엑셀과 같은 출처 — 풍력·ESS·태양광 세부 포함)
+#   날짜를 지정해 조회(POST)하면 그날의 5분 단위 자료(ictArr)가 페이지에 들어 있음
+#   windPower 풍력 | nuclearPower 원자력 | totCoal 석탄 | oil 유류 | gas 가스 | waterPower 수력
+#   raisingWater 양수(충전 시 음수) | essMw ESS(충전 시 음수) | sunlight 태양광(전력시장)
+# ---------------------------------------------------------------------------
+KPX_SRC_PAGE = "https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart"
+KPX_SRC_KEYS = ["nuclearPower", "totCoal", "oil", "gas", "waterPower", "raisingWater", "essMw", "windPower", "sunlight"]
+_kpx_sess = {}
+
+
+def fetch_kpx_source_day(ymd):
+    """해당 일자 5분 자료 목록(ictArr). 실패 시 None."""
+    try:
+        if "s" not in _kpx_sess:
+            s_ = requests.Session()
+            r = s_.get(KPX_SRC_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 90))
+            m = re.search(r'name="_csrf"\s+value="([^"]+)"', r.text)
+            if r.status_code != 200 or not m:
+                print(f">> [발전량(KPX) 경고] 페이지 접속/인증값 확인 실패 (HTTP {r.status_code})")
+                return None
+            _kpx_sess["s"], _kpx_sess["csrf"] = s_, m.group(1)
+        dash = f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}"
+        data = {"mid": "a10404030000", "device": "chart", "_csrf": _kpx_sess["csrf"],
+                "view_sdate": dash, "view_edate": dash, "view_sdate31": dash, "view_edate31": dash}
+        last = None
+        for i in (1, 2):
+            try:
+                r = _kpx_sess["s"].post(KPX_SRC_PAGE, data=data, headers={"User-Agent": "Mozilla/5.0", "Referer": KPX_SRC_PAGE}, timeout=(20, 90))
+                break
+            except Exception as e:
+                last = type(e).__name__
+                print(f">> [발전량(KPX) 통신 실패 {i}/2] {last}")
+                time.sleep(10)
+        else:
+            return None
+        m = re.search(r"var\s+ictArr\s*=\s*(\[.*?\])\s*;", r.text, re.S)
+        if r.status_code != 200 or not m:
+            print(f">> [발전량(KPX) 경고] {ymd} 자료를 찾지 못했습니다 (HTTP {r.status_code})")
+            return None
+        arr = json.loads(m.group(1))
+        arr = [x for x in arr if str(x.get("regDate", "")).startswith(dash)]
+        print(f">> [발전량(KPX)] {ymd} 5분 자료 {len(arr)}건 수신")
+        return arr
+    except Exception as e:
+        print(f">> [발전량(KPX) 오류] {ymd}: {type(e).__name__}: {e}")
+        return None
+
+
+def kpx_hourly(arr):
+    """5분 자료 → {항목: 24시간 평균}. 시간대마다 6건 미만이면 None."""
+    hrs = [[] for _ in range(24)]
+    try:
+        for x in arr:
+            hrs[int(str(x["regDate"])[11:13])].append([float(str(x[k]).replace(",", "")) for k in KPX_SRC_KEYS])
+    except (KeyError, ValueError, TypeError) as e:
+        print(f">> [발전량(KPX) 경고] 자료 형식 오류: {type(e).__name__} {e}")
+        return None
+    if any(len(h) < 6 for h in hrs):
+        return None
+    return {k: [sum(v[i] for v in hrs[h]) / len(hrs[h]) for h in range(24)] for i, k in enumerate(KPX_SRC_KEYS)}
+
+
+def gen_from_kpx(H):
+    p, e = H["raisingWater"], H["essMw"]
+    p_gen, p_load = [max(0.0, v) for v in p], [min(0.0, v) for v in p]
+    e_dis, e_chg = [max(0.0, v) for v in e], [min(0.0, v) for v in e]
+    nuc, coal, oil, gas, hydro = H["nuclearPower"], H["totCoal"], H["oil"], H["gas"], H["waterPower"]
+    net = [nuc[i] + coal[i] + oil[i] + gas[i] + hydro[i] + p_gen[i] + e_dis[i] for i in range(24)]
+    r2 = lambda xs: [round(v, 2) for v in xs]
+    return {'nuclear': r2(nuc), 'coal': r2(coal), 'oil': r2(oil), 'gas': r2(gas), 'hydro': r2(hydro),
+            'pump_gen': r2(p_gen), 'pump_load': r2(p_load), 'ess_dis': r2(e_dis), 'ess_chg': r2(e_chg),
+            'wind': r2(H["windPower"]), 'solar': r2(H["sunlight"]), 'net_load': r2(net),
+            'spread': r2([p[i] + e[i] for i in range(24)])}
+
+
+def build_gen_updates_kpx(need_days, vday):
+    """KPX 페이지 기반 발전량. 기존 확정일(vday)과 대조해 통과해야 사용. 실패한 날은 결과에서 빠짐(→ API로 대체)."""
+    out = {}
+    try:
+        if vday:
+            arr = fetch_kpx_source_day(vday)
+            H = kpx_hourly(arr) if arr else None
+            if H is None:
+                print(f">> [발전량(KPX) 경고] 검증일 {vday} 자료를 확보하지 못했습니다. API 방식으로 대체합니다.")
+                return {}
+            conv, old = gen_from_kpx(H), master["days"][vday]["gen"]
+            print(f">> [발전량(KPX) 검증] 기준일 {vday}: 페이지 값 vs 기존 확정값 (평균 절대차이, 허용오차 = max(30MW, 평균의 2%))")
+            ok = True
+            for name, key in [("원자력", "nuclear"), ("석탄", "coal"), ("유류", "oil"), ("LNG", "gas"), ("수력", "hydro"),
+                              ("풍력", "wind"), ("태양광", "solar"), ("양수발전", "pump_gen"), ("양수펌핑", "pump_load"),
+                              ("ESS방전", "ess_dis"), ("ESS충전", "ess_chg")]:
+                mean_abs = sum(abs(v) for v in old[key]) / 24
+                diff = sum(abs(a - b) for a, b in zip(conv[key], old[key])) / 24
+                good = diff <= max(30.0, 0.02 * mean_abs)
+                ok = ok and good
+                print(f"   - {name}: 평균 {mean_abs:,.0f}MW, 차이 {diff:,.1f}MW → {'OK' if good else '불일치'}")
+            if not ok:
+                print(">> [발전량(KPX) 경고] 기존 확정값과 맞지 않아 API 방식으로 대체합니다.")
+                return {}
+        for d in sorted(need_days):
+            arr = fetch_kpx_source_day(d)
+            H = kpx_hourly(arr) if arr else None
+            if H is None or sum(H["nuclearPower"]) / 24 < 1000:
+                print(f">> [발전량(KPX) 경고] {d} 자료가 불완전합니다. API 방식으로 대체합니다.")
+                continue
+            g = gen_from_kpx(H)
+            out[d] = {"gen": g, "src": "kpx", "note": "KPX 발전원별 실시간 전력수급(풍력·ESS 포함)"}
+            print(f">> [발전량(KPX)] {d} 반영: 원자력 {sum(g['nuclear'])/24:,.0f} / 석탄 {sum(g['coal'])/24:,.0f} / LNG {sum(g['gas'])/24:,.0f} "
+                  f"/ 풍력 {sum(g['wind'])/24:,.0f} / 태양광 {sum(g['solar'])/24:,.0f} MW (일평균)")
+    except Exception as e:
+        print(f">> [발전량(KPX) 오류] {type(e).__name__}: {e} — API 방식으로 대체합니다.")
+    return out
+
+
 api_smp = fetch_land_smp(target_date_str)
 
 if not api_smp:
@@ -710,11 +825,15 @@ def smp_needs_fix(day):
 
 
 fix_smp = {d for d in window if smp_needs_fix(master["days"][d])}
-copied = {d for d in window if master["days"][d].get("gen_src") != "api" and is_copied_gen(d)}
-vday_candidates = [d for d in window if d not in copied and master["days"][d].get("gen_src") != "api"
+copied = {d for d in window if master["days"][d].get("gen_src") != "kpx"
+          and (master["days"][d].get("gen_src") == "api" or is_copied_gen(d))}
+vday_candidates = [d for d in window if d not in copied and not master["days"][d].get("gen_src")
                    and (master["days"][d].get("gen") or {}).get("wind")]
 vday = vday_candidates[-1] if vday_candidates else None
-gen_updates = build_gen_updates(copied | {target_date_str}, vday)
+need_gen = copied | {target_date_str}
+gen_updates = build_gen_updates_kpx(need_gen, vday)
+if need_gen - set(gen_updates):  # KPX 페이지에서 못 받은 날은 공공데이터포털 API 값으로 대체
+    gen_updates.update(build_gen_updates(need_gen - set(gen_updates), vday))
 
 fixed_avg = {}
 for d in sorted(fix_smp):
@@ -738,7 +857,7 @@ for d in window:  # 날짜 오름차순: 앞선 날 보정이 뒤 날의 전일�
     avg, basis = fixed_avg.get(d, (day.get("smp_avg"), day.get("smp_basis")))
     master["days"][d] = build_day_payload(d, day["smp_hourly"], {"gen": day.get("gen", default_gen)}, cap=cap,
                                           smp_avg=avg, avg_basis=basis, gen_info=gen_updates.get(d))
-    if d not in gen_updates and day.get("gen_src") == "api":  # 이미 API로 채운 발전량 표시는 유지
+    if d not in gen_updates and day.get("gen_src"):  # 이미 실제 자료로 채운 발전량 표시는 유지
         master["days"][d]["gen_src"], master["days"][d]["gen_note"] = day["gen_src"], day.get("gen_note", "")
 
 prev_day = master["days"].get(prev_date_str, {})
@@ -754,57 +873,6 @@ print(f"🎉 {target_date_str} SMP 반영 완료")
 if cap_target:
     print(f">> [전력수급] {target_date_str} 공급능력 {cap_target['cap']:,}MW, 최대전력 {cap_target['peak']:,}MW({cap_target['time']}), 예비율 {cap_target['res']}% 반영")
 if target_date_str in gen_updates:
-    print(f">> [발전량] {target_date_str} 발전원별 발전량을 API 값으로 반영했습니다 ({gen_updates[target_date_str]['note']}).")
+    print(f">> [발전량] {target_date_str} 발전원별 발전량을 실제 자료로 반영했습니다 ({gen_updates[target_date_str]['note']}).")
 else:
     print(f">> [발전량 경고] {target_date_str} 발전량은 API 반영에 실패하여 전일 값을 유지했습니다. 위 로그를 확인하세요.")
-
-# ---------------------------------------------------------------------------
-# [임시 점검 2] KPX '발전원별 실시간 전력수급' 페이지의 날짜 지정 조회(POST)와 자료 항목 확인 (로그 전용, data.json 영향 없음)
-# ---------------------------------------------------------------------------
-KPX_SRC_PAGE = "https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart"
-
-
-def probe_kpx_day(sess, csrf, ymd):
-    dash = f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}"
-    data = {"mid": "a10404030000", "device": "chart", "_csrf": csrf,
-            "view_sdate": dash, "view_edate": dash, "view_sdate31": dash, "view_edate31": dash}
-    r = sess.post(KPX_SRC_PAGE, data=data, headers={"User-Agent": "Mozilla/5.0", "Referer": KPX_SRC_PAGE}, timeout=(20, 90))
-    m = re.search(r"var\s+ictArr\s*=\s*(\[.*?\])\s*;", r.text, re.S)
-    print(f">> [점검2] {ymd} POST HTTP {r.status_code}, 길이 {len(r.text):,}자, ictArr {'있음' if m else '없음'}")
-    if not m:
-        return None
-    arr = json.loads(m.group(1))
-    print(f">> [점검2] {ymd} 자료 {len(arr)}건, 첫 {arr[0].get('regDate')} / 끝 {arr[-1].get('regDate')}")
-    return arr
-
-
-def probe_kpx_source():
-    try:
-        print(">> [점검2] KPX 발전원별 페이지 날짜 지정 조회 확인")
-        sess = requests.Session()
-        r = sess.get(KPX_SRC_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 90))
-        m = re.search(r'name="_csrf"\s+value="([^"]+)"', r.text)
-        print(f">> [점검2] 페이지 HTTP {r.status_code}, csrf {'확인' if m else '없음'}")
-        if not m:
-            return
-        arr = probe_kpx_day(sess, m.group(1), target_date_str)
-        if arr:
-            print(">> [점검2] 첫 자료 항목:")
-            for k, v in arr[0].items():
-                print(f"   {k} = {v}")
-        arr = probe_kpx_day(sess, m.group(1), "20260927")
-        if arr:
-            print(">> [점검2] 20260927 항목별 시간대 평균(1~24시):")
-            for k in arr[0]:
-                try:
-                    hrs = {}
-                    for x in arr:
-                        hrs.setdefault(str(x.get("regDate"))[11:13], []).append(float(str(x[k]).replace(",", "")))
-                    print(f"   {k}: " + " ".join(f"{sum(v) / len(v):.0f}" for _, v in sorted(hrs.items())))
-                except (ValueError, TypeError):
-                    pass
-    except Exception as e:
-        print(f">> [점검2 오류] {type(e).__name__}: {e}")
-
-
-probe_kpx_source()
