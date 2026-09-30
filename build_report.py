@@ -309,25 +309,12 @@ def _day_cap(info):
     return r7[0].get("cap") or 91000
 
 
-def repair_days_with_kpx(kpx_rows, skip_date):
-    """이미 저장된 날짜 중 KPX 실적과 다른 값(예: 전일 값이 복사된 날)을 실적으로 바로잡음."""
-    for d in sorted(kpx_rows):
-        day = master["days"].get(d)
-        if not day or d == skip_date:
-            continue
-        k = kpx_rows[d]
-        same = (day.get("cap_peak") == k["peak"] and day.get("cap_time") == k["time"]
-                and day.get("cap_res") == k["res"] and _day_cap(day) == k["cap"])
-        if same:
-            continue
-        print(f">> [전력수급 보정] {d}: 최대전력 {day.get('cap_peak')}→{k['peak']}MW, 예비율 {day.get('cap_res')}→{k['res']}%")
-        master["days"][d] = build_day_payload(d, day["smp_hourly"], {"gen": day.get("gen", default_gen)}, cap=k)
-
-
-def build_day_payload(d_str, land_smp, prev_day_data, cap=None):
-    """cap: KPX 전력수급실적 {'cap','peak','time','res'}. 없으면 전일 값을 임시로 유지(로그로 경고)."""
+def build_day_payload(d_str, land_smp, prev_day_data, cap=None, smp_avg=None, avg_basis=None, gen_info=None):
+    """cap: KPX 전력수급실적 {'cap','peak','time','res'}. 없으면 전일 값을 임시로 유지(로그로 경고).
+    smp_avg: 가중평균 SMP(미지정 시 단순평균). gen_info: {'gen':{...}, 'note':str} (미지정 시 전일 발전량 유지)."""
     d_dt = datetime.strptime(d_str, "%Y%m%d").replace(tzinfo=KST)
-    smp_avg = round(sum(land_smp)/24, 2)
+    if smp_avg is None:
+        smp_avg = round(sum(land_smp)/24, 2)
     smp_max = round(max(land_smp), 2)
     smp_min = round(min(land_smp), 2)
     max_idx = land_smp.index(smp_max)
@@ -380,7 +367,7 @@ def build_day_payload(d_str, land_smp, prev_day_data, cap=None):
 
     lng_price, diff_lng_text, diff_lng_color = lng_fields(d_str)
 
-    return {
+    payload = {
         'smp_hourly': land_smp, 'smp_avg': smp_avg, 'smp_max': smp_max, 'smp_min': smp_min,
         'smp_max_idx': max_idx, 'smp_min_idx': min_idx, 'peak_band': f"{left+1}~{right+1}시", 'peak_left': left, 'peak_right': right,
         'cap_cap': cap_cap, 'cap_peak': cap_peak, 'cap_time': cap_time, 'cap_res': cap_res,
@@ -390,6 +377,13 @@ def build_day_payload(d_str, land_smp, prev_day_data, cap=None):
         'diff_min_txt': diff_min_txt, 'diff_min_color': diff_min_color,
         'recent_7': recent_7, 'gen': prev_day_data.get("gen", default_gen)
     }
+    if avg_basis:
+        payload['smp_basis'] = avg_basis
+    if gen_info:
+        payload['gen'] = gen_info['gen']
+        payload['gen_src'] = 'api'
+        payload['gen_note'] = gen_info.get('note', '')
+    return payload
 
 
 # 0. LNG 월별 단가표 준비 (기존 값으로 채운 뒤 KOGAS 최신 게시분 반영)
@@ -414,6 +408,9 @@ API_URL = "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForec
 
 def http_get_text(params, attempts=3, use_curl_fallback=True):
     return http_get(API_URL, params, attempts, use_curl_fallback)
+
+
+LAND_MLFD = {}  # {일자: [24시간 육지 수요예측(MW)]}  ← SMP 가중평균 계산용
 
 
 def fetch_land_smp(trade_date, attempts=3, use_curl_fallback=True):
@@ -453,17 +450,34 @@ def fetch_land_smp(trade_date, attempts=3, use_curl_fallback=True):
         print(">> [지역 오류] 육지 행을 찾지 못했습니다.")
         return None
 
-    by_hour = {}
+    by_hour, mlfd_by_hour = {}, {}
     for x in land:
         try:
             by_hour[int(x["hour"])] = float(x["smp"])
         except (KeyError, ValueError, TypeError):
             continue
+        try:
+            mlfd_by_hour[int(x["hour"])] = float(x["mlfd"])
+        except (KeyError, ValueError, TypeError):
+            pass
     hours = sorted(by_hour)
     if hours != list(range(1, 25)) and hours != list(range(0, 24)):
         print(f">> [시간 오류] 24시간이 모두 있지 않습니다. 수신 시간대: {hours}")
         return None
+    if sorted(mlfd_by_hour) == hours and sum(mlfd_by_hour.values()) > 0:
+        LAND_MLFD[trade_date] = [mlfd_by_hour[h] for h in hours]
+    else:
+        print(f">> [수요예측 경고] {trade_date} 수요예측(mlfd)이 모두 있지 않아 가중평균을 계산할 수 없습니다.")
     return [by_hour[h] for h in hours]
+
+
+def smp_avg_for(d_str, smp):
+    """KPX 공표 '가중평균'과 같은 방식: 시간대별 SMP를 육지 수요예측(MW)으로 가중평균 (2022~2026 공표값과 비교 시 0.01원 이내 일치).
+    수요예측이 없으면 단순평균으로 대체하고 기준을 'mean'으로 표시."""
+    w = LAND_MLFD.get(d_str)
+    if w and len(w) == len(smp):
+        return round(sum(p * q for p, q in zip(smp, w)) / sum(w), 2), "weighted"
+    return round(sum(smp) / len(smp), 2), "mean"
 
 
 def report_check_vs_master(smp_list, d_str):
@@ -476,6 +490,188 @@ def report_check_vs_master(smp_list, d_str):
         print(f">> [검증] {d_str} API 값이 기존 확정값과 일치합니다.")
     else:
         print(f">> [검증 주의] {d_str} API 값이 기존 확정값과 다릅니다 (최대 차이 {diff:.2f}원). 하루 전 계획값일 수 있습니다.")
+
+
+# ---------------------------------------------------------------------------
+# 발전원별 발전량: 한국전력거래소_발전원별 발전량(계통기준) — 5분 단위 자료를 시간대별 평균(MW)으로 변환
+#   응답 필드(추정 매핑, 실행 시 기존 확정 데이터와 대조해 검증):
+#   fuelPwr1 수력 | 2 유류 | 3 유연탄 | 4 원자력 | 5 양수(충전 시 음수) | 6 가스 | 7 국내탄 | 8 신재생(풍력+기타) | 9 태양광
+#   ※ 이 API에는 풍력·ESS가 따로 없음 → 풍력은 '신재생-기타 신재생(검증일에서 산출)'로 추정, ESS는 0으로 표시
+# ---------------------------------------------------------------------------
+GEN_API_URL = "https://apis.data.go.kr/B552115/PwrAmountByGen/getPwrAmountByGen"
+FUEL_KEYS = [f"fuelPwr{i}" for i in range(1, 10)]
+GEN_SERIES = [("원자력", "nuclear"), ("석탄", "coal"), ("유류", "oil"), ("LNG", "gas"),
+              ("수력", "hydro"), ("태양광", "solar")]
+
+
+def _gen_items(data):
+    root = data.get("response", data) if isinstance(data, dict) else {}
+    header = root.get("header", {}) if isinstance(root, dict) else {}
+    body = root.get("body", {}) if isinstance(root, dict) else {}
+    items = body.get("items", {}) if isinstance(body, dict) else {}
+    if isinstance(items, dict):
+        items = items.get("item", [])
+    if isinstance(items, dict):
+        items = [items]
+    return header, body, (items if isinstance(items, list) else [])
+
+
+def fetch_gen_rows(oldest_date, max_pages=30):
+    """최신 자료부터 내려가며 oldest_date(YYYYMMDD) 이전 자료가 나올 때까지 수집.
+    반환: {YYYYMMDD: {baseDatetime(14자리): [fuelPwr1..9]}}  (실패 시 {})"""
+    print(f">> [발전량] 발전원별 발전량 API 조회 중 (최소 {oldest_date} 자료까지)...")
+    rows, size, page = {}, None, 1
+    for try_size in (1000, 300, 100):
+        params = {"serviceKey": API_KEY, "pageNo": 1, "numOfRows": try_size, "dataType": "json"}
+        got = http_get(GEN_API_URL, params, attempts=2)
+        if got is None:
+            print(">> [발전량 경고] 접속 실패")
+            return {}
+        try:
+            header, body, items = _gen_items(json.loads(got[1]))
+        except ValueError:
+            print(">> [발전량 경고] JSON이 아님:", got[1][:300].replace(API_KEY, "***"))
+            return {}
+        print(f">> [발전량 결과] HTTP {got[0]} code={header.get('resultCode')} msg={header.get('resultMsg')} "
+              f"totalCount={body.get('totalCount')} 요청행수={try_size} 수신행수={len(items)}")
+        if items:
+            size = try_size
+            break
+    if not size:
+        print(">> [발전량 경고] 자료를 받지 못했습니다.")
+        return {}
+
+    def absorb(items):
+        oldest_seen = None
+        for x in items:
+            try:
+                dt = str(x["baseDatetime"])[:14]
+                vals = [float(x[k]) for k in FUEL_KEYS]
+            except (KeyError, ValueError, TypeError):
+                continue
+            rows.setdefault(dt[:8], {})[dt] = vals
+            oldest_seen = dt[:8] if oldest_seen is None or dt[:8] < oldest_seen else oldest_seen
+        return oldest_seen
+
+    first_dt = str(items[0].get("baseDatetime", ""))[:14]
+    last_dt = str(items[-1].get("baseDatetime", ""))[:14]
+    print(f">> [발전량] 첫 행 {first_dt} / 마지막 행 {last_dt} (최신순이어야 함)")
+    oldest_seen = absorb(items)
+    while oldest_seen and oldest_seen >= oldest_date and page < max_pages:
+        page += 1
+        params = {"serviceKey": API_KEY, "pageNo": page, "numOfRows": size, "dataType": "json"}
+        got = http_get(GEN_API_URL, params, attempts=2)
+        if got is None:
+            print(f">> [발전량 경고] {page}쪽 접속 실패")
+            break
+        try:
+            _, _, items = _gen_items(json.loads(got[1]))
+        except ValueError:
+            break
+        if not items:
+            break
+        oldest_seen = absorb(items)
+    print(f">> [발전량] 수집 일자: {min(rows) if rows else '-'} ~ {max(rows) if rows else '-'} ({page}쪽)")
+    return rows
+
+
+def hourly_fuels(day_rows):
+    """하루치 5분 자료 → F[k][h] (k=0..8, h=0..23 시간대별 평균). 시간대마다 6개 미만이면 불완전으로 보고 None."""
+    buckets = [[] for _ in range(24)]
+    for dt, v in day_rows.items():
+        buckets[int(dt[8:10])].append(v)
+    if any(len(b) < 6 for b in buckets):
+        return None
+    return [[sum(v[k] for v in buckets[h]) / len(buckets[h]) for h in range(24)] for k in range(9)]
+
+
+def gen_from_hourly(F, wind_base):
+    """시간대별 연료별 값 → 홈페이지 gen 구조 (기존 엑셀 기반 구조와 동일한 키/부호 규칙)."""
+    nuc, oil, gas, hydro, pump, solar = F[3], F[1], F[5], F[0], F[4], F[8]
+    coal = [a + b for a, b in zip(F[2], F[6])]
+    p_gen = [max(0.0, v) for v in pump]
+    p_load = [min(0.0, v) for v in pump]
+    wind = [max(0.0, r - wind_base) for r in F[7]] if wind_base is not None else [0.0] * 24
+    net = [nuc[i] + coal[i] + oil[i] + gas[i] + hydro[i] + p_gen[i] for i in range(24)]
+    r2 = lambda xs: [round(v, 2) for v in xs]
+    return {'nuclear': r2(nuc), 'coal': r2(coal), 'oil': r2(oil), 'gas': r2(gas), 'hydro': r2(hydro),
+            'pump_gen': r2(p_gen), 'pump_load': r2(p_load), 'ess_dis': [0.0] * 24, 'ess_chg': [0.0] * 24,
+            'wind': r2(wind), 'solar': r2(solar), 'net_load': r2(net), 'spread': r2(pump)}
+
+
+def validate_gen_mapping(F, stored, label):
+    """API 값을 기존 확정(엑셀) 값과 대조. 반환: (통과여부, 기타신재생 기준값 또는 None)"""
+    conv = gen_from_hourly(F, None)
+    ok = True
+    print(f">> [발전량 검증] 기준일 {label}: API 시간대별 평균 vs 기존 확정값 (평균 절대차이, 허용오차 = max(80MW, 평균의 3%))")
+    checks = [(n, conv[k], stored[k]) for n, k in GEN_SERIES]
+    checks.append(("양수(순)", F[4], [a + b for a, b in zip(stored["pump_gen"], stored["pump_load"])]))
+    for name, api, old in checks:
+        mean_abs = sum(abs(v) for v in old) / 24
+        diff = sum(abs(a - b) for a, b in zip(api, old)) / 24
+        tol = max(80.0, 0.03 * mean_abs)
+        good = diff <= tol
+        ok = ok and good
+        print(f"   - {name}: 평균 {mean_abs:,.0f}MW, 차이 {diff:,.1f}MW → {'OK' if good else '불일치'}")
+    diffs = [F[7][h] - stored["wind"][h] for h in range(24)]
+    m = sum(diffs) / 24
+    sd = (sum((d - m) ** 2 for d in diffs) / 24) ** 0.5
+    base = None
+    if 500 <= m <= 5000 and sd <= 150:
+        base = round(m, 1)
+    print(f"   - 신재생(API)-풍력(기존): 평균 {m:,.0f}MW, 편차 {sd:,.0f}MW → {'기타 신재생 기준값으로 사용' if base is not None else '일정하지 않아 풍력 추정 생략(0)'}")
+    return ok, base
+
+
+def is_copied_gen(d):
+    """해당 일자의 발전량이 전일 값을 그대로 복사한 것인지 (복사된 날 = API로 교체 대상)."""
+    day = master["days"].get(d, {})
+    prev = master["days"].get((datetime.strptime(d, "%Y%m%d") - timedelta(days=1)).strftime("%Y%m%d"))
+    g, pg = day.get("gen"), (prev or {}).get("gen")
+    return bool(g and pg and g.get("nuclear") == pg.get("nuclear") and g.get("coal") == pg.get("coal"))
+
+
+def build_gen_updates(need_days, vday):
+    """{일자: {'gen':..., 'note':...}} 를 반환. 검증을 통과하지 못하면 {} (기존 값 유지)."""
+    try:
+        oldest = min(list(need_days) + ([vday] if vday else []))
+        rows = fetch_gen_rows(oldest)
+        if not rows:
+            return {}
+        calib = master.get("gen_calib") or {}
+        wind_base = None
+        if vday:
+            F = hourly_fuels(rows.get(vday, {})) if vday in rows else None
+            if F is None:
+                print(f">> [발전량 경고] 검증일 {vday} 자료가 부족하여 검증하지 못했습니다. 발전량은 기존 값을 유지합니다.")
+                return {}
+            ok, wind_base = validate_gen_mapping(F, master["days"][vday]["gen"], vday)
+            if not ok:
+                print(">> [발전량 경고] 기존 확정값과 맞지 않아 발전량은 기존 값을 유지합니다. (위 표를 확인)")
+                return {}
+            master["gen_calib"] = {"ok": True, "validated_on": vday, "other_re_mw": wind_base}
+        elif calib.get("ok"):
+            wind_base = calib.get("other_re_mw")
+            print(f">> [발전량] 비교할 기존 확정일이 없어 이전 검증 결과({calib.get('validated_on')})를 사용합니다.")
+        else:
+            print(">> [발전량 경고] 검증 기준이 없어 발전량은 기존 값을 유지합니다.")
+            return {}
+        note = "풍력=신재생-기타 신재생 추정, ESS 미제공(0)" if wind_base is not None else "풍력·ESS 미제공(0)"
+        out = {}
+        for d in sorted(need_days):
+            F = hourly_fuels(rows.get(d, {})) if d in rows else None
+            if F is None:
+                got = len(rows.get(d, {}))
+                print(f">> [발전량 경고] {d} 자료가 24시간 모두 확보되지 않았습니다 (5분 자료 {got}건). 기존 값을 유지합니다.")
+                continue
+            out[d] = {"gen": gen_from_hourly(F, wind_base), "note": note}
+            g = out[d]["gen"]
+            print(f">> [발전량] {d} 반영: 원자력 {sum(g['nuclear'])/24:,.0f} / 석탄 {sum(g['coal'])/24:,.0f} / LNG {sum(g['gas'])/24:,.0f} "
+                  f"/ 태양광 {sum(g['solar'])/24:,.0f} / 풍력(추정) {sum(g['wind'])/24:,.0f} MW (일평균)")
+        return out
+    except Exception as e:
+        print(f">> [발전량 오류] {type(e).__name__}: {e} — 발전량은 기존 값을 유지합니다.")
+        return {}
 
 
 api_smp = fetch_land_smp(target_date_str)
@@ -492,16 +688,63 @@ if prev_api:
 else:
     print(">> [검증 생략] 전일 비교용 호출이 실패하여 확정값 비교는 건너뜁니다.")
 
+target_avg, target_basis = smp_avg_for(target_date_str, api_smp)
+print(f">> [SMP 평균] {target_date_str} 가중평균 {target_avg}원 (기준={target_basis}) / 단순평균 {round(sum(api_smp)/24, 2)}원")
+
 # 3. 수집 성공 시 저장
-# 3-1. 전일 전력수급실적(KPX): 이미 저장된 날짜 중 실적과 다른 값 보정 → 대상일에 반영
+# 3-1. 전일 전력수급실적(KPX)
 kpx_rows = fetch_kpx_supply_demand()
 cap_target = kpx_rows.get(target_date_str)
 if not cap_target:
     print(f">> [전력수급 경고] {target_date_str} 실적이 표에서 확인되지 않아 최대전력·예비율은 전일 값을 임시로 유지합니다.")
-repair_days_with_kpx(kpx_rows, skip_date=target_date_str)
+
+# 3-2. 최근 10일 저장분 점검: (가) SMP 평균이 단순평균으로 들어간 날 (나) 전일 발전량이 복사된 날 (다) KPX 실적과 다른 날
+win_start = (target_dt - timedelta(days=10)).strftime("%Y%m%d")
+window = sorted(d for d in master["days"] if win_start <= d < target_date_str)
+
+
+def smp_needs_fix(day):
+    h = day.get("smp_hourly") or []
+    return (len(h) == 24 and day.get("smp_basis") != "weighted"
+            and abs(day.get("smp_avg", 0) - round(sum(h) / 24, 2)) <= 0.005)
+
+
+fix_smp = {d for d in window if smp_needs_fix(master["days"][d])}
+copied = {d for d in window if master["days"][d].get("gen_src") != "api" and is_copied_gen(d)}
+vday_candidates = [d for d in window if d not in copied and master["days"][d].get("gen_src") != "api"
+                   and (master["days"][d].get("gen") or {}).get("wind")]
+vday = vday_candidates[-1] if vday_candidates else None
+gen_updates = build_gen_updates(copied | {target_date_str}, vday)
+
+fixed_avg = {}
+for d in sorted(fix_smp):
+    got = fetch_land_smp(d, attempts=2, use_curl_fallback=False)
+    if got and d in LAND_MLFD:
+        fixed_avg[d] = smp_avg_for(d, master["days"][d]["smp_hourly"])
+        print(f">> [SMP 평균 보정] {d}: {master['days'][d]['smp_avg']} → {fixed_avg[d][0]}원 (수요예측 가중평균)")
+    else:
+        print(f">> [SMP 평균 경고] {d} 수요예측을 받지 못해 평균 보정을 건너뜁니다.")
+
+for d in window:  # 날짜 오름차순: 앞선 날 보정이 뒤 날의 전일대비·최근7일에 반영되도록
+    day = master["days"][d]
+    k = kpx_rows.get(d)
+    cap_same = (k is None or (day.get("cap_peak") == k["peak"] and day.get("cap_time") == k["time"]
+                              and day.get("cap_res") == k["res"] and _day_cap(day) == k["cap"]))
+    if d not in fixed_avg and d not in gen_updates and cap_same:
+        continue
+    if not cap_same:
+        print(f">> [전력수급 보정] {d}: 최대전력 {day.get('cap_peak')}→{k['peak']}MW, 예비율 {day.get('cap_res')}→{k['res']}%")
+    cap = k if k else {"cap": _day_cap(day), "peak": day.get("cap_peak"), "time": day.get("cap_time"), "res": day.get("cap_res")}
+    avg, basis = fixed_avg.get(d, (day.get("smp_avg"), day.get("smp_basis")))
+    master["days"][d] = build_day_payload(d, day["smp_hourly"], {"gen": day.get("gen", default_gen)}, cap=cap,
+                                          smp_avg=avg, avg_basis=basis, gen_info=gen_updates.get(d))
+    if d not in gen_updates and day.get("gen_src") == "api":  # 이미 API로 채운 발전량 표시는 유지
+        master["days"][d]["gen_src"], master["days"][d]["gen_note"] = day["gen_src"], day.get("gen_note", "")
 
 prev_day = master["days"].get(prev_date_str, {})
-master["days"][target_date_str] = build_day_payload(target_date_str, api_smp, prev_day, cap=cap_target)
+master["days"][target_date_str] = build_day_payload(target_date_str, api_smp, prev_day, cap=cap_target,
+                                                    smp_avg=target_avg, avg_basis=target_basis,
+                                                    gen_info=gen_updates.get(target_date_str))
 master["latest_date"] = target_date_str
 
 with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -510,4 +753,45 @@ with open(DATA_FILE, "w", encoding="utf-8") as f:
 print(f"🎉 {target_date_str} SMP 반영 완료")
 if cap_target:
     print(f">> [전력수급] {target_date_str} 공급능력 {cap_target['cap']:,}MW, 최대전력 {cap_target['peak']:,}MW({cap_target['time']}), 예비율 {cap_target['res']}% 반영")
-print(">> [참고] 발전원별 발전량은 아직 전일 값을 유지합니다 (다음 단계에서 API 연동).")
+if target_date_str in gen_updates:
+    print(f">> [발전량] {target_date_str} 발전원별 발전량을 API 값으로 반영했습니다 ({gen_updates[target_date_str]['note']}).")
+else:
+    print(f">> [발전량 경고] {target_date_str} 발전량은 API 반영에 실패하여 전일 값을 유지했습니다. 위 로그를 확인하세요.")
+
+# ---------------------------------------------------------------------------
+# [임시 점검] KPX '발전원별 실시간 전력수급' 페이지 구조 확인 (로그 전용, data.json 영향 없음)
+#   풍력·ESS·태양광 세부 자료를 이 페이지/엑셀에서 받을 수 있는지 확인하기 위한 것
+# ---------------------------------------------------------------------------
+def probe_kpx_source():
+    try:
+        base = "https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart"
+        print(">> [점검] KPX 발전원별 페이지 구조 확인")
+        got = http_get(base, attempts=2)
+        if got is None:
+            print(">> [점검] 접속 실패")
+            return
+        status, text = got
+        print(f">> [점검] HTTP {status}, 길이 {len(text):,}자")
+        for m in re.finditer(r"<(form|input|select)\b[^>]*>", text, re.I):
+            print(">> [점검:태그]", m.group(0)[:200])
+        shown = 0
+        for line in text.splitlines():
+            if re.search(r"xlsx|ajax|\.es\?|\.es\"|\.es'|getJSON|fetch\(|searchDate|date|풍력|ESS", line, re.I) and len(line.strip()) > 3:
+                print(">> [점검:코드]", line.strip()[:260])
+                shown += 1
+                if shown >= 60:
+                    break
+        yest = target_date_str
+        for label, url in (("엑셀(무인자)", "https://new.kpx.or.kr/xlsxdownload.es?act=powersourceV2"),
+                           ("엑셀(날짜)", f"https://new.kpx.or.kr/xlsxdownload.es?act=powersourceV2&startDate={yest}&endDate={yest}"),
+                           ("페이지(날짜)", base + f"&date={yest}")):
+            try:
+                r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 60))
+                print(f">> [점검:{label}] HTTP {r.status_code} type={r.headers.get('Content-Type')} size={len(r.content):,} disp={r.headers.get('Content-Disposition')}")
+            except Exception as e:
+                print(f">> [점검:{label}] 실패 {type(e).__name__}")
+    except Exception as e:
+        print(f">> [점검 오류] {type(e).__name__}: {e}")
+
+
+probe_kpx_source()
