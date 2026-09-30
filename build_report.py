@@ -759,39 +759,52 @@ else:
     print(f">> [발전량 경고] {target_date_str} 발전량은 API 반영에 실패하여 전일 값을 유지했습니다. 위 로그를 확인하세요.")
 
 # ---------------------------------------------------------------------------
-# [임시 점검] KPX '발전원별 실시간 전력수급' 페이지 구조 확인 (로그 전용, data.json 영향 없음)
-#   풍력·ESS·태양광 세부 자료를 이 페이지/엑셀에서 받을 수 있는지 확인하기 위한 것
+# [임시 점검 2] KPX '발전원별 실시간 전력수급' 페이지의 날짜 지정 조회(POST)와 자료 항목 확인 (로그 전용, data.json 영향 없음)
 # ---------------------------------------------------------------------------
+KPX_SRC_PAGE = "https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart"
+
+
+def probe_kpx_day(sess, csrf, ymd):
+    dash = f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}"
+    data = {"mid": "a10404030000", "device": "chart", "_csrf": csrf,
+            "view_sdate": dash, "view_edate": dash, "view_sdate31": dash, "view_edate31": dash}
+    r = sess.post(KPX_SRC_PAGE, data=data, headers={"User-Agent": "Mozilla/5.0", "Referer": KPX_SRC_PAGE}, timeout=(20, 90))
+    m = re.search(r"var\s+ictArr\s*=\s*(\[.*?\])\s*;", r.text, re.S)
+    print(f">> [점검2] {ymd} POST HTTP {r.status_code}, 길이 {len(r.text):,}자, ictArr {'있음' if m else '없음'}")
+    if not m:
+        return None
+    arr = json.loads(m.group(1))
+    print(f">> [점검2] {ymd} 자료 {len(arr)}건, 첫 {arr[0].get('regDate')} / 끝 {arr[-1].get('regDate')}")
+    return arr
+
+
 def probe_kpx_source():
     try:
-        base = "https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart"
-        print(">> [점검] KPX 발전원별 페이지 구조 확인")
-        got = http_get(base, attempts=2)
-        if got is None:
-            print(">> [점검] 접속 실패")
+        print(">> [점검2] KPX 발전원별 페이지 날짜 지정 조회 확인")
+        sess = requests.Session()
+        r = sess.get(KPX_SRC_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 90))
+        m = re.search(r'name="_csrf"\s+value="([^"]+)"', r.text)
+        print(f">> [점검2] 페이지 HTTP {r.status_code}, csrf {'확인' if m else '없음'}")
+        if not m:
             return
-        status, text = got
-        print(f">> [점검] HTTP {status}, 길이 {len(text):,}자")
-        for m in re.finditer(r"<(form|input|select)\b[^>]*>", text, re.I):
-            print(">> [점검:태그]", m.group(0)[:200])
-        shown = 0
-        for line in text.splitlines():
-            if re.search(r"xlsx|ajax|\.es\?|\.es\"|\.es'|getJSON|fetch\(|searchDate|date|풍력|ESS", line, re.I) and len(line.strip()) > 3:
-                print(">> [점검:코드]", line.strip()[:260])
-                shown += 1
-                if shown >= 60:
-                    break
-        yest = target_date_str
-        for label, url in (("엑셀(무인자)", "https://new.kpx.or.kr/xlsxdownload.es?act=powersourceV2"),
-                           ("엑셀(날짜)", f"https://new.kpx.or.kr/xlsxdownload.es?act=powersourceV2&startDate={yest}&endDate={yest}"),
-                           ("페이지(날짜)", base + f"&date={yest}")):
-            try:
-                r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 60))
-                print(f">> [점검:{label}] HTTP {r.status_code} type={r.headers.get('Content-Type')} size={len(r.content):,} disp={r.headers.get('Content-Disposition')}")
-            except Exception as e:
-                print(f">> [점검:{label}] 실패 {type(e).__name__}")
+        arr = probe_kpx_day(sess, m.group(1), target_date_str)
+        if arr:
+            print(">> [점검2] 첫 자료 항목:")
+            for k, v in arr[0].items():
+                print(f"   {k} = {v}")
+        arr = probe_kpx_day(sess, m.group(1), "20260927")
+        if arr:
+            print(">> [점검2] 20260927 항목별 시간대 평균(1~24시):")
+            for k in arr[0]:
+                try:
+                    hrs = {}
+                    for x in arr:
+                        hrs.setdefault(str(x.get("regDate"))[11:13], []).append(float(str(x[k]).replace(",", "")))
+                    print(f"   {k}: " + " ".join(f"{sum(v) / len(v):.0f}" for _, v in sorted(hrs.items())))
+                except (ValueError, TypeError):
+                    pass
     except Exception as e:
-        print(f">> [점검 오류] {type(e).__name__}: {e}")
+        print(f">> [점검2 오류] {type(e).__name__}: {e}")
 
 
 probe_kpx_source()
