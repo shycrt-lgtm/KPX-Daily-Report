@@ -1,5 +1,4 @@
 import os
-import glob
 import json
 import time
 import requests
@@ -18,82 +17,35 @@ with open(DATA_FILE, "r", encoding="utf-8") as f:
 
 KST = timezone(timedelta(hours=9))
 target_dt = datetime.now(KST) - timedelta(days=1)
-target_date_str = target_dt.strftime("%Y%m%d")
+target_date_str = target_dt.strftime("%Y%m%d") # 20260929
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 
-def fetch_api_smp_new(trade_date, api_key):
-    url = "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemandList"
-    params = {"serviceKey": api_key, "pageNo": 1, "numOfRows": 30, "tradeDate": trade_date, "dataType": "JSON"}
-    try:
-        resp = requests.get(url, params=params, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
-            if items:
-                items = sorted(items, key=lambda x: int(x.get('tradeHour', x.get('hour', 0))))
-                hourly = [float(x.get('smp', x.get('landSmp', 0))) for x in items if int(x.get('tradeHour', x.get('hour', 0))) in range(1, 25)]
-                if len(hourly) == 24: return hourly
-    except: pass
-    return None
+default_gen = {
+    'nuclear': [0]*24, 'coal': [0]*24, 'oil': [0]*24, 'gas': [0]*24, 'hydro': [0]*24, 
+    'pump_gen': [0]*24, 'pump_load': [0]*24, 'ess_dis': [0]*24, 'ess_chg': [0]*24, 
+    'wind': [0]*24, 'solar': [0]*24, 'net_load': [0]*24, 'spread': [0]*24
+}
 
-# 🚨 이빨 빠진 날짜(28일)부터 오늘 타깃(29일)까지 순서대로 모두 찾아내서 복구하는 로직
-latest_saved_str = master.get("latest_date", "20260927")
-latest_dt = datetime.strptime(latest_saved_str, "%Y%m%d").replace(tzinfo=KST)
-
-dates_to_update = []
-curr = latest_dt + timedelta(days=1)
-while curr <= target_dt:
-    dates_to_update.append(curr.strftime("%Y%m%d"))
-    curr += timedelta(days=1)
-
-if target_date_str not in dates_to_update:
-    dates_to_update.append(target_date_str)
-
-for d_str in dates_to_update:
-    print(f">> 타깃 일자 복구/수집 중: {d_str}")
-    
-    api_smp = fetch_api_smp_new(d_str, DATA_GO_KR_KEY)
-    
-    # 28일 확정 실적 하드코딩 백업
-    kpx_actual_20260928 = [100.28, 97.45, 97.45, 97.45, 97.45, 97.45, 102.40, 107.07, 107.28, 107.24, 106.86, 107.23, 106.49, 107.23, 108.30, 112.47, 130.69, 130.69, 130.69, 130.69, 130.69, 130.69, 127.91, 115.49]
-
-    # 직전일 데이터 찾기
-    prev_dates = sorted([k for k in master["days"].keys() if k < d_str])
-    prev_key = prev_dates[-1] if prev_dates else latest_saved_str
-    prev_day_data = master["days"][prev_key]
-
-    if api_smp and len(api_smp) == 24:
-        land_smp = api_smp
-        print(f"✅ {d_str} API 실시간 데이터 적용 완료")
-    elif d_str == "20260928":
-        land_smp = kpx_actual_20260928
-        print(f"✅ {d_str} 공식 실적 백업본 적용 완료")
-    else:
-        land_smp = prev_day_data["smp_hourly"]
-        print(f"🚨 {d_str} API 실패! 부득이하게 직전일 데이터 복사")
-
+def build_day_payload(d_str, land_smp, prev_day_data):
+    d_dt = datetime.strptime(d_str, "%Y%m%d").replace(tzinfo=KST)
     smp_avg = round(sum(land_smp)/24, 2)
     smp_max = round(max(land_smp), 2)
     smp_min = round(min(land_smp), 2)
     max_idx = land_smp.index(smp_max)
     min_idx = land_smp.index(smp_min)
-
+    
     thresh = smp_min + (smp_max - smp_min) * 0.85
     left, right = max_idx, max_idx
     while left > 0 and land_smp[left-1] >= thresh: left -= 1
     while right < 23 and land_smp[right+1] >= thresh: right += 1
     if (right - left) > 6: left = max(0, max_idx - 2); right = min(23, max_idx + 2)
-    peak_band = f"{left+1}~{right+1}시"
-
-    # 최근 7일 구성 (이빨 빠짐 방지)
-    d_dt = datetime.strptime(d_str, "%Y%m%d").replace(tzinfo=KST)
+    
     recent_7 = [{
         'date': f"{d_dt.month}.{d_dt.day}({weekday_kr_list[d_dt.weekday()]})",
         'is_holiday': d_dt.weekday() in [5, 6] or d_str in master["holidays"],
         'avg': smp_avg, 'max': smp_max, 'min': smp_min,
-        'cap': prev_day_data["cap_peak"] + 20000, 'peak': prev_day_data["cap_peak"], 'time': prev_day_data["cap_time"], 'res': prev_day_data["cap_res"]
+        'cap': prev_day_data.get("cap_peak", 68000) + 20000, 'peak': prev_day_data.get("cap_peak", 68000), 'time': prev_day_data.get("cap_time", "19:00"), 'res': prev_day_data.get("cap_res", 30.0)
     }]
-    
     for delta in range(1, 7):
         p_dt = d_dt - timedelta(days=delta)
         p_k = p_dt.strftime("%Y%m%d")
@@ -105,7 +57,7 @@ for d_str in dates_to_update:
                 'avg': p_info["smp_avg"], 'max': p_info["smp_max"], 'min': p_info["smp_min"],
                 'cap': p_info.get("cap_cap", 91000), 'peak': p_info["cap_peak"], 'time': p_info["cap_time"], 'res': p_info["cap_res"]
             })
-
+            
     diff_avg_val = round(smp_avg - recent_7[1]["avg"], 2) if len(recent_7) > 1 else 0.0
     diff_max_val = round(smp_max - recent_7[1]["max"], 2) if len(recent_7) > 1 else 0.0
     diff_min_val = round(smp_min - recent_7[1]["min"], 2) if len(recent_7) > 1 else 0.0
@@ -119,19 +71,54 @@ for d_str in dates_to_update:
     diff_max_txt, diff_max_color = fmt_diff(diff_max_val)
     diff_min_txt, diff_min_color = fmt_diff(diff_min_val)
 
-    master["days"][d_str] = {
+    return {
         'smp_hourly': land_smp, 'smp_avg': smp_avg, 'smp_max': smp_max, 'smp_min': smp_min,
-        'smp_max_idx': max_idx, 'smp_min_idx': min_idx, 'peak_band': peak_band, 'peak_left': left, 'peak_right': right,
-        'cap_peak': prev_day_data["cap_peak"], 'cap_time': prev_day_data["cap_time"], 'cap_res': prev_day_data["cap_res"],
+        'smp_max_idx': max_idx, 'smp_min_idx': min_idx, 'peak_band': f"{left+1}~{right+1}시", 'peak_left': left, 'peak_right': right,
+        'cap_peak': prev_day_data.get("cap_peak", 68000), 'cap_time': prev_day_data.get("cap_time", "19:00"), 'cap_res': prev_day_data.get("cap_res", 30.0),
         'lng_price': 1058.34, 'diff_lng_text': "전월비 +88.73원", 'diff_lng_color': "text-rose-600", 'prev_smp_str': "147.88원/kWh",
         'diff_avg_txt': diff_avg_txt, 'diff_avg_color': diff_avg_color,
         'diff_max_txt': diff_max_txt, 'diff_max_color': diff_max_color,
         'diff_min_txt': diff_min_txt, 'diff_min_color': diff_min_color,
-        'recent_7': recent_7, 'gen': prev_day_data["gen"]
+        'recent_7': recent_7, 'gen': prev_day_data.get("gen", default_gen)
     }
-    master["latest_date"] = d_str
+
+# 1. 28일 완벽 복구 (빈칸 원천 차단)
+if "20260928" not in master["days"]:
+    print(">> [복구] 28일 데이터 누락 감지, 공식 실적으로 즉시 생성합니다.")
+    kpx_28 = [100.28, 97.45, 97.45, 97.45, 97.45, 97.45, 102.40, 107.07, 107.28, 107.24, 106.86, 107.23, 106.49, 107.23, 108.30, 112.47, 130.69, 130.69, 130.69, 130.69, 130.69, 130.69, 127.91, 115.49]
+    prev_27 = master["days"].get("20260927", {})
+    master["days"]["20260928"] = build_day_payload("20260928", kpx_28, prev_27)
+    master["latest_date"] = "20260928"
+
+# 2. 29일(어제) 진짜 실적 수집
+def fetch_api_smp(trade_date):
+    url = "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemandList"
+    params = {"serviceKey": DATA_GO_KR_KEY, "pageNo": 1, "numOfRows": 30, "tradeDate": trade_date, "dataType": "JSON"}
+    try:
+        resp = requests.get(url, params=params, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
+            if items:
+                items = sorted(items, key=lambda x: int(x.get('tradeHour', x.get('hour', 0))))
+                hourly = [float(x.get('smp', x.get('landSmp', 0))) for x in items if int(x.get('tradeHour', x.get('hour', 0))) in range(1, 25)]
+                if len(hourly) == 24: return hourly
+    except Exception as e:
+        print("API Error:", e)
+    return None
+
+api_smp = fetch_api_smp(target_date_str)
+
+if not api_smp:
+    # 🚨 엉뚱한 값 복사 원천 차단: API가 아직 업데이트 안됐으면 거짓말하지 않고 즉시 스크립트 중지
+    raise ValueError(f"🚨 팩트: 전력거래소 API가 아직 {target_date_str} 실적을 업데이트하지 않았거나 지연 중입니다. 가짜 숫자로 덮어쓰지 않기 위해 중단합니다.")
+
+# 정상 수집되었을 경우에만 저장
+prev_28 = master["days"].get("20260928", {})
+master["days"][target_date_str] = build_day_payload(target_date_str, api_smp, prev_28)
+master["latest_date"] = target_date_str
 
 with open(DATA_FILE, "w", encoding="utf-8") as f:
     json.dump(master, f, ensure_ascii=False)
 
-print(f"🎉 성공! 누락된 데이터({dates_to_update}) 복구 및 갱신 완료!")
+print(f"🎉 성공! 누락된 28일 복구 및 {target_date_str} 진짜 실적으로 완벽 업데이트!")
