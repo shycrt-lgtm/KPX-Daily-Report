@@ -1,8 +1,10 @@
 import os
+import re
 import json
 import subprocess
 import time
 import urllib.parse
+from html.parser import HTMLParser
 import requests
 import sys
 from datetime import datetime, timedelta, timezone
@@ -29,10 +31,221 @@ target_date_str = target_dt.strftime("%Y%m%d")
 weekday_kr_list = ["월", "화", "수", "목", "금", "토", "일"]
 
 default_gen = {
-    'nuclear': [0]*24, 'coal': [0]*24, 'oil': [0]*24, 'gas': [0]*24, 'hydro': [0]*24, 
-    'pump_gen': [0]*24, 'pump_load': [0]*24, 'ess_dis': [0]*24, 'ess_chg': [0]*24, 
+    'nuclear': [0]*24, 'coal': [0]*24, 'oil': [0]*24, 'gas': [0]*24, 'hydro': [0]*24,
+    'pump_gen': [0]*24, 'pump_load': [0]*24, 'ess_dis': [0]*24, 'ess_chg': [0]*24,
     'wind': [0]*24, 'solar': [0]*24, 'net_load': [0]*24, 'spread': [0]*24
 }
+
+
+# ---------------------------------------------------------------------------
+# 공통: HTTP 호출 (접속 시간 초과 등은 대기 후 재시도, 마지막에 curl(IPv4)로 대체 시도)
+# ---------------------------------------------------------------------------
+def _decode(b):
+    for enc in ("utf-8", "cp949"):
+        try:
+            return b.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return b.decode("utf-8", errors="replace")
+
+
+def http_get(url, params=None, attempts=3, use_curl_fallback=True, timeout=(20, 60)):
+    """(status, text) 를 반환하며 끝내 실패하면 None."""
+    last = None
+    for i in range(1, attempts + 1):
+        try:
+            r = requests.get(url, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
+            if r.status_code < 500 and r.status_code != 429:
+                return r.status_code, _decode(r.content)
+            last = f"HTTP {r.status_code}"
+        except Exception as e:
+            last = f"{type(e).__name__}"
+        print(f">> [통신 실패 {i}/{attempts}] {last}")
+        if i < attempts:
+            time.sleep(10 * i)
+
+    if use_curl_fallback:
+        print(">> [대체 호출] curl(IPv4)로 재시도합니다.")
+        full = url + ("?" + urllib.parse.urlencode(params) if params else "")
+        try:
+            res = subprocess.run(
+                ["curl", "-sS", "-4", "--connect-timeout", "20", "--max-time", "60",
+                 "-H", "User-Agent: Mozilla/5.0", "-w", "\n%{http_code}", full],
+                capture_output=True, timeout=90)
+            if res.returncode == 0 and res.stdout:
+                body, _, code = res.stdout.rpartition(b"\n")
+                return int(code or 0), _decode(body)
+            print(f">> [curl 실패] exit={res.returncode} {_decode(res.stderr)[:200].replace(API_KEY, '***')}")
+        except Exception as e:
+            print(f">> [curl 에러] {type(e).__name__}")
+    return None
+
+
+# ---------------------------------------------------------------------------
+# LNG 단가: 한국가스공사(KOGAS) 발전용 천연가스 요금 중 '일반발전사업자' 합계(원료비+공급비)
+#   원/GJ → 원/㎥ 환산 (10,190kcal/㎥, 1kcal=4.1868J)  ※ 기존 엑셀(입방당/GJ당)과 동일 방식
+# ---------------------------------------------------------------------------
+KOGAS_URL = "https://www.kogas.or.kr/site/koGas/1040402000000"
+GJ_PER_M3 = 10190 * 4.1868 / 1e6
+LNG_COLUMN_NAME = "일반발전사업자"
+
+
+class _TableParser(HTMLParser):
+    """표(table)를 행/셀 텍스트 목록으로 추출 (표준 라이브러리만 사용)."""
+
+    def __init__(self):
+        super().__init__()
+        self.tables = []
+        self._t = None
+        self._row = None
+        self._cell = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "table":
+            self._t = []
+        elif tag == "tr" and self._t is not None:
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+        elif tag == "br" and self._cell is not None:
+            self._cell.append(" ")
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self._cell is not None and self._row is not None:
+            self._row.append(" ".join("".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None and self._t is not None:
+            self._t.append(self._row)
+            self._row = None
+        elif tag == "table" and self._t is not None:
+            self.tables.append(self._t)
+            self._t = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def parse_kogas_power_price(html):
+    """페이지에서 (적용연월, 원료비, 공급비, 합계[원/GJ]) 중 '일반발전사업자' 열 값을 추출. 실패 시 None."""
+    p = _TableParser()
+    p.feed(html)
+    for tbl in p.tables:
+        flat = " ".join(" ".join(r) for r in tbl)
+        if LNG_COLUMN_NAME not in flat or "합계" not in flat:
+            continue
+        ym, hdr, vals = None, None, {}
+        for row in tbl:
+            joined = " ".join(row)
+            if ym is None:
+                m = re.search(r"(\d{4})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})", joined)
+                if m and "시행" in joined:
+                    ym = f"{int(m.group(1)):04d}{int(m.group(2)):02d}"
+            if hdr is None and LNG_COLUMN_NAME in row:
+                hdr = [c for c in row if c and c != "구분"]
+            if row and row[0] in ("원료비", "공급비", "합계"):
+                vals[row[0]] = row[1:]
+        if not (ym and hdr and all(k in vals for k in ("원료비", "공급비", "합계"))):
+            print(f">> [LNG 파싱 실패] 표 구조를 인식하지 못했습니다 (적용월={ym}, 머리글={hdr}, 항목={list(vals)})")
+            continue
+        if hdr.count(LNG_COLUMN_NAME) > 1:
+            print(f">> [LNG 경고] '{LNG_COLUMN_NAME}' 열이 여러 개입니다. 첫 번째 열을 사용합니다: {hdr}")
+        col = hdr.index(LNG_COLUMN_NAME)
+        try:
+            def num(key):
+                return float(re.sub(r"[^0-9.]", "", vals[key][col]))
+            fuel, supply, total = num("원료비"), num("공급비"), num("합계")
+        except (IndexError, ValueError):
+            print(f">> [LNG 파싱 실패] 숫자를 읽지 못했습니다 (머리글={hdr}, 값={vals})")
+            continue
+        if abs(fuel + supply - total) > 0.06 or not (5000 < total < 100000):
+            print(f">> [LNG 검증 실패] 값이 비정상입니다: 원료비={fuel}, 공급비={supply}, 합계={total}")
+            continue
+        return {"ym": ym, "fuel_gj": fuel, "supply_gj": supply, "total_gj": total}
+    return None
+
+
+def lng_table():
+    return master.setdefault("lng_monthly", {})
+
+
+def seed_lng_table():
+    """기존 일별 데이터의 월별 LNG 단가로 월별표를 채움(없는 달만)."""
+    t = lng_table()
+    for k, d in master["days"].items():
+        ym = k[:6]
+        if ym not in t and "lng_price" in d:
+            t[ym] = {"total_m3": d["lng_price"], "src": "seed"}
+
+
+def update_lng_from_kogas():
+    """KOGAS 페이지의 현재 게시 월 단가를 월별표에 반영. 실패해도 전체 작업은 계속(직전 값 유지)."""
+    print(">> [LNG 단가] KOGAS 발전용 천연가스 요금 조회 중...")
+    got = http_get(KOGAS_URL, attempts=2)
+    if got is None:
+        print(">> [LNG 경고] KOGAS 페이지에 접속하지 못했습니다. 월별표의 기존 값을 사용합니다.")
+        return
+    status, text = got
+    print(f">> [LNG 상태] HTTP {status}")
+    info = parse_kogas_power_price(text)
+    if not info:
+        print(">> [LNG 경고] 요금 표를 읽지 못했습니다. 월별표의 기존 값을 사용합니다.")
+        return
+    ym = info["ym"]
+    total_m3 = round(info["total_gj"] * GJ_PER_M3, 2)
+    old = lng_table().get(ym)
+    if old and abs(old.get("total_m3", total_m3) - total_m3) > 0.05:
+        print(f">> [LNG 주의] {ym} 기존값 {old.get('total_m3')}원/㎥ → KOGAS 환산값 {total_m3}원/㎥ 로 갱신")
+    lng_table()[ym] = {
+        "total_m3": total_m3,
+        "fuel_m3": round(info["fuel_gj"] * GJ_PER_M3, 2),
+        "supply_m3": round(info["supply_gj"] * GJ_PER_M3, 2),
+        "total_gj": info["total_gj"],
+        "src": "kogas",
+    }
+    print(f">> [LNG 단가] {ym} {LNG_COLUMN_NAME} 합계 {info['total_gj']:,.2f}원/GJ → {total_m3:,.2f}원/㎥ (10,190kcal/㎥ 환산)")
+
+
+def lng_price_for(ym):
+    t = lng_table()
+    if ym in t:
+        return t[ym]["total_m3"]
+    earlier = sorted(k for k in t if k < ym)
+    if earlier:
+        print(f">> [LNG 경고] {ym} 단가가 없어 {earlier[-1]} 값을 대신 사용합니다.")
+        return t[earlier[-1]]["total_m3"]
+    return None
+
+
+def _prev_ym(ym):
+    first = datetime.strptime(ym + "01", "%Y%m%d")
+    return (first - timedelta(days=1)).strftime("%Y%m")
+
+
+def lng_fields(d_str):
+    """해당 일자가 속한 월의 LNG 단가와 전월비 문구/색상."""
+    ym = d_str[:6]
+    cur = lng_price_for(ym)
+    if cur is None:
+        print(f">> [LNG 경고] {ym} 단가 정보가 전혀 없어 0으로 표시합니다.")
+        return 0.0, "전월비 변동없음", "text-slate-500"
+    prev = lng_price_for(_prev_ym(ym))
+    if prev is None:
+        prev = cur
+    d = round(cur - prev, 2)
+    if d > 0:
+        return cur, f"전월비 +{abs(d):.2f}원", "text-rose-600"
+    if d < 0:
+        return cur, f"전월비 ▼{abs(d):.2f}원", "text-blue-600"
+    return cur, "전월비 변동없음", "text-slate-500"
+
+
+def prev_month_smp_str(d_str):
+    """전월 평균 SMP (전월 일평균 SMP의 평균)."""
+    pym = _prev_ym(d_str[:6])
+    vals = [d["smp_avg"] for k, d in master["days"].items() if k.startswith(pym) and "smp_avg" in d]
+    return f"{sum(vals) / len(vals):.2f}원/kWh" if vals else "-"
+
 
 def build_day_payload(d_str, land_smp, prev_day_data):
     d_dt = datetime.strptime(d_str, "%Y%m%d").replace(tzinfo=KST)
@@ -41,13 +254,13 @@ def build_day_payload(d_str, land_smp, prev_day_data):
     smp_min = round(min(land_smp), 2)
     max_idx = land_smp.index(smp_max)
     min_idx = land_smp.index(smp_min)
-    
+
     thresh = smp_min + (smp_max - smp_min) * 0.85
     left, right = max_idx, max_idx
     while left > 0 and land_smp[left-1] >= thresh: left -= 1
     while right < 23 and land_smp[right+1] >= thresh: right += 1
     if (right - left) > 6: left = max(0, max_idx - 2); right = min(23, max_idx + 2)
-    
+
     recent_7 = [{
         'date': f"{d_dt.month}.{d_dt.day}({weekday_kr_list[d_dt.weekday()]})",
         'is_holiday': d_dt.weekday() in [5, 6] or d_str in master["holidays"],
@@ -65,7 +278,7 @@ def build_day_payload(d_str, land_smp, prev_day_data):
                 'avg': p_info["smp_avg"], 'max': p_info["smp_max"], 'min': p_info["smp_min"],
                 'cap': p_info.get("cap_cap", 91000), 'peak': p_info["cap_peak"], 'time': p_info["cap_time"], 'res': p_info["cap_res"]
             })
-            
+
     diff_avg_val = round(smp_avg - recent_7[1]["avg"], 2) if len(recent_7) > 1 else 0.0
     diff_max_val = round(smp_max - recent_7[1]["max"], 2) if len(recent_7) > 1 else 0.0
     diff_min_val = round(smp_min - recent_7[1]["min"], 2) if len(recent_7) > 1 else 0.0
@@ -79,16 +292,23 @@ def build_day_payload(d_str, land_smp, prev_day_data):
     diff_max_txt, diff_max_color = fmt_diff(diff_max_val)
     diff_min_txt, diff_min_color = fmt_diff(diff_min_val)
 
+    lng_price, diff_lng_text, diff_lng_color = lng_fields(d_str)
+
     return {
         'smp_hourly': land_smp, 'smp_avg': smp_avg, 'smp_max': smp_max, 'smp_min': smp_min,
         'smp_max_idx': max_idx, 'smp_min_idx': min_idx, 'peak_band': f"{left+1}~{right+1}시", 'peak_left': left, 'peak_right': right,
         'cap_peak': prev_day_data.get("cap_peak", 68420), 'cap_time': prev_day_data.get("cap_time", "19:00"), 'cap_res': prev_day_data.get("cap_res", 36.8),
-        'lng_price': 1058.34, 'diff_lng_text': "전월비 +88.73원", 'diff_lng_color': "text-rose-600", 'prev_smp_str': "147.88원/kWh",
+        'lng_price': lng_price, 'diff_lng_text': diff_lng_text, 'diff_lng_color': diff_lng_color, 'prev_smp_str': prev_month_smp_str(d_str),
         'diff_avg_txt': diff_avg_txt, 'diff_avg_color': diff_avg_color,
         'diff_max_txt': diff_max_txt, 'diff_max_color': diff_max_color,
         'diff_min_txt': diff_min_txt, 'diff_min_color': diff_min_color,
         'recent_7': recent_7, 'gen': prev_day_data.get("gen", default_gen)
     }
+
+
+# 0. LNG 월별 단가표 준비 (기존 값으로 채운 뒤 KOGAS 최신 게시분 반영)
+seed_lng_table()
+update_lng_from_kogas()
 
 # 1. 28일 완벽 복구
 if "20260928" not in master["days"]:
@@ -97,7 +317,7 @@ if "20260928" not in master["days"]:
     prev_27 = master["days"].get("20260927", {})
     master["days"]["20260928"] = build_day_payload("20260928", kpx_28, prev_27)
     master["latest_date"] = "20260928"
-    
+
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(master, f, ensure_ascii=False)
     print(">> [복구] 28일 데이터 정상 디스크 기록 완료.")
@@ -107,36 +327,7 @@ API_URL = "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForec
 
 
 def http_get_text(params, attempts=3, use_curl_fallback=True):
-    """API 호출. 접속 시간 초과 등 통신 오류는 대기 후 재시도하고, 마지막에 curl(IPv4)로도 시도.
-    (status, text) 를 반환하며 끝내 실패하면 None."""
-    last = None
-    for i in range(1, attempts + 1):
-        try:
-            r = requests.get(API_URL, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 60))
-            if r.status_code < 500 and r.status_code != 429:
-                return r.status_code, r.text
-            last = f"HTTP {r.status_code}"
-        except Exception as e:
-            last = f"{type(e).__name__}"
-        print(f">> [통신 실패 {i}/{attempts}] {last}")
-        if i < attempts:
-            time.sleep(10 * i)
-
-    if use_curl_fallback:
-        print(">> [대체 호출] curl(IPv4)로 재시도합니다.")
-        url = API_URL + "?" + urllib.parse.urlencode(params)
-        try:
-            res = subprocess.run(
-                ["curl", "-sS", "-4", "--connect-timeout", "20", "--max-time", "60",
-                 "-H", "User-Agent: Mozilla/5.0", "-w", "\n%{http_code}", url],
-                capture_output=True, text=True, timeout=90)
-            if res.returncode == 0 and res.stdout:
-                body, _, code = res.stdout.rpartition("\n")
-                return int(code or 0), body
-            print(f">> [curl 실패] exit={res.returncode} {res.stderr[:200].replace(API_KEY, '***')}")
-        except Exception as e:
-            print(f">> [curl 에러] {type(e).__name__}")
-    return None
+    return http_get(API_URL, params, attempts, use_curl_fallback)
 
 
 def fetch_land_smp(trade_date, attempts=3, use_curl_fallback=True):
@@ -224,4 +415,4 @@ with open(DATA_FILE, "w", encoding="utf-8") as f:
     json.dump(master, f, ensure_ascii=False)
 
 print(f"🎉 {target_date_str} SMP 반영 완료")
-print(">> [참고] 발전원별 발전량·최대부하·공급예비율·LNG 단가는 아직 전일 값을 유지합니다 (다음 단계에서 API 연동).")
+print(">> [참고] 발전원별 발전량·최대부하·공급예비율은 아직 전일 값을 유지합니다 (다음 단계에서 API 연동).")
