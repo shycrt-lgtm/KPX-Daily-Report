@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>전력시장 전일실적 대시보드</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; background-color: #ffffff; color: #1a1a1a; }
+    .mckinsey-border { border-top: 4px solid #001f3f; }
+    .chart-container { position: relative; height: 450px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }
+    table th, table td { border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }
+    table th { background-color: #f8fafc; font-weight: 700; color: #334155; }
+    .text-holiday { color: #dc2626 !important; font-weight: 700; }
+    h2 { font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+    .flatpickr-calendar { border: 1px solid #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); }
+    .flatpickr-calendar .flatpickr-day.holiday-day, .flatpickr-calendar .flatpickr-day.weekend-day { color: #dc2626 !important; font-weight: 700 !important; }
+    .flatpickr-calendar .flatpickr-day.holiday-day::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background-color: #dc2626; }
+    .flatpickr-calendar .flatpickr-day.selected.holiday-day, .flatpickr-calendar .flatpickr-day.selected.weekend-day { background: #001f3f !important; color: #ffffff !important; }
+    .flatpickr-calendar .flatpickr-weekday:first-child, .flatpickr-calendar .flatpickr-weekday:last-child { color: #dc2626 !important; font-weight: 700; }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+  <div class="max-w-6xl mx-auto space-y-8">
+    <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+      <div>
+        <a href="https://shycrt-lgtm.github.io/Energy-Index/" class="text-xs font-bold text-slate-400 hover:text-slate-700">← 처음 화면</a>
+        <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
+        <p class="text-sm text-slate-500 mt-1">기준일: <strong id="headerDisplayDate" class="text-slate-800 font-bold">로딩 중...</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
+      </div>
+
+      <div class="flex flex-col md:items-end gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 바로가기:</span>
+          <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs">⚡ 실시간 수급현황</a>
+          <a href="smp_live.html" class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs">📈 실시간 SMP</a>
+        </div>
+
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+          <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
+          <div class="relative flex items-center">
+            <input type="text" id="historyDate" class="bg-transparent text-xs md:text-sm font-bold text-slate-800 outline-none cursor-pointer w-28 pr-6 text-center" readonly>
+            <svg class="w-4 h-4 text-slate-500 absolute right-1 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <span id="badgeWeekday" class="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-white border-slate-200">(-)</span>
+          <div class="ml-2 pl-2 border-l border-slate-200">
+            <button id="btnLatest" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#001f3f] hover:bg-slate-800 text-white text-xs font-bold rounded shadow transition">
+              <span id="btnLatestText">⚡ 최신 실적으로</span> &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2>00. Executive Summary</h2>
+      <div id="boxSummary" class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium">로딩 중...</div>
+    </div>
+
+    <div>
+      <h2>01. 전일 전력시장 실적요약</h2>
+      <div class="grid grid-cols-2 md:grid-cols-7 gap-0 border border-slate-200">
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-slate-50">
+          <p class="text-xs font-bold text-slate-500 mb-1">LNG 단가 (당월)</p>
+          <div class="flex items-end gap-1"><span id="valLngPrice" class="text-2xl font-black text-slate-800">-</span><span class="text-[11px] font-medium pb-1">원/Nm³</span></div>
+          <p id="valLngDiff" class="text-[11px] font-semibold mt-1 text-slate-500">-</p>
+          <p class="text-[10px] text-slate-500 mt-0.5 font-medium">전월평균 SMP: <span id="valPrevSmp" class="font-bold text-slate-700">-</span></p>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">가중평균 SMP</p>
+          <div class="flex items-end gap-1"><span id="valAvgSmp" class="text-2xl font-black text-slate-900">-</span><span class="text-xs font-medium pb-1">원</span></div>
+          <p id="valAvgDiff" class="text-[11px] font-semibold mt-1 text-slate-500">-</p>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-rose-50/30">
+          <p class="text-xs font-bold text-slate-500 mb-1">최고 SMP</p>
+          <div class="flex items-end gap-1"><span id="valMaxSmp" class="text-2xl font-black text-[#d93f3c]">-</span><span class="text-xs font-medium pb-1">원</span></div>
+          <p id="valMaxDiff" class="text-[11px] font-semibold mt-1 text-slate-500">-</p>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">최저 SMP</p>
+          <div class="flex items-end gap-1"><span id="valMinSmp" class="text-2xl font-black text-slate-900">-</span><span class="text-xs font-medium pb-1">원</span></div>
+          <p id="valMinDiff" class="text-[11px] font-semibold mt-1 text-slate-500">-</p>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">최대전력 (피크)</p>
+          <div class="flex items-end gap-1"><span id="valPeakMw" class="text-2xl font-black text-slate-900">-</span><span class="text-xs font-medium pb-1">MW</span></div>
+        </div>
+        <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">피크 발생시간</p>
+          <div class="flex items-end gap-1"><span id="valPeakTime" class="text-2xl font-black text-slate-900">-</span></div>
+        </div>
+        <div class="p-4 flex flex-col justify-center">
+          <p class="text-xs font-bold text-slate-500 mb-1">공급예비율</p>
+          <div class="flex items-end gap-1"><span id="valResRatio" class="text-2xl font-black text-emerald-600">-</span><span class="text-xs font-medium pb-1">%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
+      <div class="chart-container"><canvas id="smpChart"></canvas></div>
+      <p class="text-xs text-slate-500 mt-2">굵은 실선: 실적일(전일) SMP, 점선: 다음날(금일) SMP — 하루전시장에서 전일 발표된 값입니다. 금일 값은 자동 수집 후 표시됩니다.</p>
+    </div>
+    <div>
+      <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead>
+            <tr><th rowspan="2">구분</th><th colspan="3">SMP (원/kWh)</th><th colspan="4">전력수급 실적 (MW)</th></tr>
+            <tr><th>가중평균</th><th>최고</th><th>최저</th><th>공급능력</th><th>최대전력</th><th>피크</th><th>예비율</th></tr>
+          </thead>
+          <tbody id="table7DaysBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h2>04. 발전원별 실시간 수급 구성 및 순부하</h2>
+      <div class="chart-container"><canvas id="generationChart"></canvas></div>
+    </div>
+    <div>
+      <h2>05. 주요 발전원 시간대별 출력 추이</h2>
+      <div class="chart-container"><canvas id="sourceLineChart"></canvas></div>
+    </div>
+    <div>
+      <h2>06. SMP 스프레드</h2>
+      <div class="chart-container"><canvas id="spreadChart"></canvas></div>
+      <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
+    </div>
+  </div>
+
+  <script>
+    if (window['chartjs-plugin-annotation']) Chart.register(window['chartjs-plugin-annotation']);
+    Chart.Tooltip.positioners.mouseFollow = function(elements, eventPosition) { return eventPosition ? { x: eventPosition.x, y: eventPosition.y } : false; };
+    const crosshairPlugin = {
+      id: 'crosshair',
+      afterDraw: chart => {
+        if (chart.tooltip && chart.tooltip._active && chart.tooltip._active.length) {
+          const activePoint = chart.tooltip._active[0];
+          const ctx = chart.ctx;
+          ctx.save(); ctx.beginPath();
+          ctx.moveTo(activePoint.element.x, chart.chartArea.top); ctx.lineTo(activePoint.element.x, chart.chartArea.bottom);
+          ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(100, 116, 139, 0.7)'; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.restore();
+        }
+      }
+    };
+    Chart.register(crosshairPlugin);
+
+    let MASTER_DATA = null;
+    let charts = {};
+    const labels = Array.from({length: 24}, (_, i) => (i + 1) + "시");
+    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+
+    const commonOptions = {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 40, right: 20, bottom: 20, left: 10 } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { usePointStyle: true, font: { family: 'Noto Sans KR', size: 12 } } },
+        tooltip: {
+          position: 'mouseFollow', backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          titleColor: '#001f3f', bodyColor: '#1a1a1a', borderColor: '#e5e7eb', borderWidth: 1,
+          padding: 10, boxPadding: 4, usePointStyle: true,
+          titleFont: { family: 'Noto Sans KR', size: 13, weight: 'bold' }, bodyFont: { family: 'Noto Sans KR', size: 12 }
+        }
+      },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, grace: '20%' } }
+    };
+
+    function initCharts() {
+      charts.smp = new Chart(document.getElementById('smpChart'), {
+        type: 'line',
+        data: { labels: labels, datasets: [
+          { label: '전일 SMP', data: [], pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3.5, pointRadius: 3, pointHoverRadius: 6, tension: 0.1, order: 1 },
+          { label: '금일 SMP', data: [], pointStyle: 'line', borderColor: '#64748b', backgroundColor: '#64748b', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 5, tension: 0.1, hidden: true, order: 2 }
+        ] },
+        options: {
+          ...commonOptions,
+          scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, title: { display: true, text: '원/kWh' }, grace: '20%' } },
+          plugins: { ...commonOptions.plugins, tooltip: { ...commonOptions.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + Number(ctx.raw).toFixed(2) + '원/kWh' } }, annotation: { annotations: {} } }
+        }
+      });
+
+      charts.gen = new Chart(document.getElementById('generationChart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { type: 'line', label: '순부하 (태양광/풍력 제외)', data: [], pointStyle: 'line', borderColor: '#1a1a1a', borderDash: [4,4], borderWidth: 2, pointRadius: 0, fill: false, z: 10, stack: 'net' },
+            { label: '원자력', data: [], backgroundColor: '#f59e0b', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: '석탄', data: [], backgroundColor: '#b45309', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: '유류', data: [], backgroundColor: '#475569', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: 'LNG', data: [], backgroundColor: '#fde047', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: '수력', data: [], backgroundColor: '#38bdf8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: '양수발전', data: [], backgroundColor: '#0284c7', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: 'ESS방전', data: [], backgroundColor: '#1d4ed8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: '풍력', data: [], backgroundColor: '#22c55e', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: '태양광', data: [], backgroundColor: '#ef4444', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: '양수펌핑(충전)', data: [], backgroundColor: '#94a3b8', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' },
+            { label: 'ESS충전', data: [], backgroundColor: '#cbd5e1', borderColor: 'transparent', fill: true, pointRadius: 0, tension: 0.2, stack: 'area' }
+          ]
+        },
+        options: { ...commonOptions, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grace: '10%' } } }
+      });
+
+      charts.source = new Chart(document.getElementById('sourceLineChart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'LNG', data: [], pointStyle: 'line', borderColor: '#005587', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+            { label: '석탄', data: [], pointStyle: 'line', borderColor: '#d93f3c', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+            { label: '태양광', data: [], pointStyle: 'line', borderColor: '#f59e0b', borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+          ]
+        },
+        options: { ...commonOptions, plugins: { ...commonOptions.plugins, annotation: { annotations: {} } } }
+      });
+
+      charts.spread = new Chart(document.getElementById('spreadChart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { type: 'line', label: '유연성 자원 순공급 (양수/ESS)', yAxisID: 'y', data: [], pointStyle: 'line', borderColor: '#059669', borderWidth: 2.5, tension: 0.3 },
+            { type: 'line', label: '계통한계가격(SMP)', yAxisID: 'y1', data: [], pointStyle: 'line', borderColor: '#005587', borderDash: [4,4], borderWidth: 1.5, tension: 0.3 }
+          ]
+        },
+        options: {
+          ...commonOptions,
+          scales: {
+            x: { grid: { display: false } },
+            y: { type: 'linear', position: 'left', title: { display: true, text: 'MW' }, grace: '15%' },
+            y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '원/kWh' }, grace: '20%' }
+          },
+          plugins: { ...commonOptions.plugins, annotation: { annotations: {} } }
+        }
+      });
+    }
+
+    // 발전량 비중(전력계통 기준) 한 줄 요약 — 선택한 일자의 발전량 자료(d.gen)로 매번 새로 생성
+    function genSummaryHtml(g) {
+      const num = v => Number(v) || 0;
+      const sum = a => (a || []).reduce((s, v) => s + num(v), 0);
+      const title = '<strong>발전량비중(전력계통) :</strong>';
+      if (!g || sum(g.nuclear) + sum(g.coal) + sum(g.gas) <= 0) return `<li>${title} 발전원별 자료 없음</li>`;
+      const groups = [
+        ['원자력', sum(g.nuclear)], ['석탄', sum(g.coal)], ['LNG', sum(g.gas)],
+        ['태양광·풍력', sum(g.solar) + sum(g.wind)],
+        ['기타(유류·수력·양수·ESS)', sum(g.oil) + sum(g.hydro) + sum(g.pump_gen) + sum(g.ess_dis)]
+      ];
+      const total = groups.reduce((s, x) => s + x[1], 0) || 1;
+      return `<li>${title} ${groups.map(x => `${x[0]} ${(x[1] / total * 100).toFixed(0)}%`).join(', ')}</li>`;
+    }
+
+    let SMP_LIVE = null;
+    function addDaysKey(k, n) {
+      const d = new Date(Date.UTC(+k.slice(0,4), +k.slice(4,6) - 1, +k.slice(6,8) + n));
+      return d.toISOString().slice(0,10).replace(/-/g, '');
+    }
+    function todayKeyKST() {
+      return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0,10).replace(/-/g, '');
+    }
+
+    function renderDay(dateKey) {
+      if (!MASTER_DATA || !MASTER_DATA.days[dateKey]) return;
+      const d = MASTER_DATA.days[dateKey];
+      const hol = MASTER_DATA.holidays;
+
+      const dObj = new Date(parseInt(dateKey.slice(0,4)), parseInt(dateKey.slice(4,6))-1, parseInt(dateKey.slice(6,8)));
+      const wDay = weekdays[dObj.getDay()];
+      const isHol = dObj.getDay() === 0 || dObj.getDay() === 6 || !!hol[dateKey];
+      const hName = hol[dateKey] || (dObj.getDay() === 0 || dObj.getDay() === 6 ? "주말" : "");
+
+      document.getElementById('headerDisplayDate').textContent = `${dObj.getFullYear()}년 ${String(dObj.getMonth()+1).padStart(2,'0')}월 ${String(dObj.getDate()).padStart(2,'0')}일(${wDay})`;
+      document.getElementById('headerDisplayDate').className = isHol ? "text-rose-600 font-black" : "text-slate-800 font-bold";
+      
+      const badge = document.getElementById('badgeWeekday');
+      badge.textContent = `(${wDay})`;
+      badge.className = `text-xs font-bold px-1.5 py-0.5 rounded border ${isHol ? 'text-rose-600 bg-rose-50 border-rose-200' : 'text-slate-500 bg-white border-slate-200'}`;
+      if (hName) badge.title = hName; else badge.removeAttribute('title');
+      document.getElementById('historyDate').value = `${dateKey.slice(0,4)}-${dateKey.slice(4,6)}-${dateKey.slice(6,8)}`;
+
+      // LNG 단가·전월비·전월 평균 SMP는 data.json 값을 그대로 사용 (build_report.py에서 계산)
+      let displayLngPrice = d.lng_price;
+      let displayLngDiffText = d.diff_lng_text;
+      let displayLngDiffColor = d.diff_lng_color;
+      let displayPrevSmpStr = d.prev_smp_str;
+
+      document.getElementById('valLngPrice').textContent = Number(displayLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+      document.getElementById('valLngDiff').textContent = displayLngDiffText || "전월비 변동없음";
+      document.getElementById('valLngDiff').className = `text-[11px] font-semibold mt-1 ${displayLngDiffColor || 'text-slate-500'}`;
+      document.getElementById('valPrevSmp').textContent = displayPrevSmpStr || "-";
+
+      document.getElementById('valAvgSmp').textContent = d.smp_avg.toFixed(2);
+      document.getElementById('valAvgDiff').textContent = `전일비 ${d.diff_avg_txt}`;
+      document.getElementById('valAvgDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_avg_color}`;
+      document.getElementById('valMaxSmp').textContent = d.smp_max.toFixed(2);
+      document.getElementById('valMaxDiff').textContent = `전일비 ${d.diff_max_txt}`;
+      document.getElementById('valMaxDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_max_color}`;
+      document.getElementById('valMinSmp').textContent = d.smp_min.toFixed(2);
+      document.getElementById('valMinDiff').textContent = `전일비 ${d.diff_min_txt}`;
+      document.getElementById('valMinDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_min_color}`;
+      document.getElementById('valPeakMw').textContent = Number(d.cap_peak).toLocaleString();
+      document.getElementById('valPeakTime').textContent = d.cap_time;
+      document.getElementById('valResRatio').textContent = Number(d.cap_res).toFixed(1);
+
+      document.getElementById('boxSummary').innerHTML = `
+        <ul class="space-y-2">
+          <li><strong>수급지표 :</strong> 최대전력수요 ${d.cap_time} 발생, 최대전력수요 ${Number(d.cap_peak).toLocaleString()}MW, 공급예비율 ${Number(d.cap_res).toFixed(1)}%</li>
+          <li>
+            <strong>가격지표 :</strong> 가중평균 SMP ${d.smp_avg.toFixed(2)}원/kWh(전일대비 ${d.diff_avg_txt}), 피크구간 ${d.peak_band}<br>
+            <span class="pl-4 text-slate-600 block mt-1">- 당월 적용 LNG 단가: ${Number(displayLngPrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}원/Nm³(${displayLngDiffText || '전월비 변동없음'}), 전월 평균 SMP: ${displayPrevSmpStr || '-'}</span>
+          </li>
+          ${genSummaryHtml(d.gen)}
+        </ul>
+      `;
+
+      let tableHtml = "";
+      d.recent_7.forEach((r, idx) => {
+        const bg = idx === 0 ? "bg-slate-50 font-bold" : "";
+        const txt = r.is_holiday ? "text-holiday" : "";
+        tableHtml += `<tr class="${bg}"><td class="${txt}">${r.date}</td><td>${r.avg.toFixed(2)}</td><td>${r.max.toFixed(2)}</td><td>${r.min.toFixed(2)}</td><td>${Number(r.cap).toLocaleString()}</td><td>${Number(r.peak).toLocaleString()}</td><td>${r.time}</td><td>${Number(r.res).toFixed(1)}%</td></tr>`;
+      });
+      document.getElementById('table7DaysBody').innerHTML = tableHtml;
+
+      charts.smp.data.datasets[0].data = d.smp_hourly;
+      {
+        // 선택한 일자의 다음날 SMP: data.json 에 있으면 그것을, 없으면 smp_live.json(전일·오늘)에서 찾는다
+        const nk = addDaysKey(dateKey, 1);
+        const nextArr = (MASTER_DATA.days[nk] && MASTER_DATA.days[nk].smp_hourly) || (SMP_LIVE && SMP_LIVE.days && SMP_LIVE.days[nk] && SMP_LIVE.days[nk].smp) || null;
+        const isToday = nk === todayKeyKST();
+        const md = k => `${+k.slice(4,6)}.${+k.slice(6,8)}`;
+        charts.smp.data.datasets[0].label = `${isToday ? '전일' : '당일'} SMP (${md(dateKey)})`;
+        charts.smp.data.datasets[1].label = `${isToday ? '금일' : '익일'} SMP (${md(nk)})`;
+        charts.smp.data.datasets[1].data = nextArr || [];
+        charts.smp.data.datasets[1].hidden = !nextArr;
+      }
+      const peakAnnotation = { type: 'box', xMin: d.peak_left, xMax: d.peak_right, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0, label: { display: true, content: `${d.peak_band} 피크`, position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} } };
+      charts.smp.options.plugins.annotation.annotations = {
+        peakBox: peakAnnotation,
+        maxPt: { type: 'point', xValue: d.smp_max_idx, yValue: d.smp_max, backgroundColor: '#d93f3c', radius: 5, borderWidth: 2, borderColor: '#fff' },
+        maxLbl: { type: 'label', xValue: d.smp_max_idx, yValue: d.smp_max, content: ['최고 ' + d.smp_max.toFixed(2) + '원'], color: '#d93f3c', yAdjust: -15, font: { weight: 'bold' } },
+        minPt: { type: 'point', xValue: d.smp_min_idx, yValue: d.smp_min, backgroundColor: '#005587', radius: 5, borderWidth: 2, borderColor: '#fff' },
+        minLbl: { type: 'label', xValue: d.smp_min_idx, yValue: d.smp_min, content: ['최저 ' + d.smp_min.toFixed(2) + '원'], color: '#005587', yAdjust: -15, font: { weight: 'bold' } }
+      };
+      charts.smp.update('none');
+
+      const g = d.gen;
+      charts.gen.data.datasets[0].data = g.net_load;
+      charts.gen.data.datasets[1].data = g.nuclear;
+      charts.gen.data.datasets[2].data = g.coal;
+      charts.gen.data.datasets[3].data = g.oil;
+      charts.gen.data.datasets[4].data = g.gas;
+      charts.gen.data.datasets[5].data = g.hydro;
+      charts.gen.data.datasets[6].data = g.pump_gen;
+      charts.gen.data.datasets[7].data = g.ess_dis;
+      charts.gen.data.datasets[8].data = g.wind;
+      charts.gen.data.datasets[9].data = g.solar;
+      charts.gen.data.datasets[10].data = g.pump_load;
+      charts.gen.data.datasets[11].data = g.ess_chg;
+      charts.gen.update('none');
+
+      charts.source.data.datasets[0].data = g.gas;
+      charts.source.data.datasets[1].data = g.coal;
+      charts.source.data.datasets[2].data = g.solar;
+      charts.source.options.plugins.annotation.annotations = { box1: peakAnnotation };
+      charts.source.update('none');
+
+      charts.spread.data.datasets[0].data = g.spread;
+      charts.spread.data.datasets[1].data = d.smp_hourly;
+      charts.spread.options.plugins.annotation.annotations = {
+        spreadMaxPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: d.smp_max_idx, yValue: d.smp_max, backgroundColor: '#d93c39', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
+        spreadMaxLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: d.smp_max_idx, yValue: d.smp_max, content: ['최고 ' + d.smp_max.toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#d93c39', yAdjust: -14 },
+        spreadMinPt: { type: 'point', xScaleID: 'x', yScaleID: 'y1', xValue: d.smp_min_idx, yValue: d.smp_min, backgroundColor: '#005587', radius: 4.5, borderWidth: 2, borderColor: '#fff' },
+        spreadMinLbl: { type: 'label', xScaleID: 'x', yScaleID: 'y1', xValue: d.smp_min_idx, yValue: d.smp_min, content: ['최저 ' + d.smp_min.toFixed(2) + '원'], font: { size: 10, weight: 'bold' }, color: '#005587', yAdjust: -14 }
+      };
+      charts.spread.update('none');
+    }
+
+    Promise.all([
+      fetch('data.json?t=' + new Date().getTime()).then(res => res.json()),
+      fetch('smp_live.json?t=' + new Date().getTime()).then(res => res.json()).catch(() => null)
+    ])
+      .then(([data, live]) => {
+        SMP_LIVE = live;
+        MASTER_DATA = data;
+        initCharts();
+
+        const latestKey = data.latest_date;
+        const latestD = `${latestKey.slice(0,4)}-${latestKey.slice(4,6)}-${latestKey.slice(6,8)}`;
+        const latestMMDD = `${latestKey.slice(4,6)}.${latestKey.slice(6,8)}`;
+        document.getElementById('btnLatestText').textContent = `⚡ 최신 실적(${latestMMDD})으로`;
+
+        flatpickr("#historyDate", {
+          locale: "ko", dateFormat: "Y-m-d", defaultDate: latestD, minDate: "2022-01-01", maxDate: latestD, disableMobile: true,
+          onDayCreate: (dObj, dStr, fp, dayElem) => {
+            const dateStr = flatpickr.formatDate(dayElem.dateObj, "Y-m-d");
+            const rawKey = dateStr.replace(/-/g, '');
+            if (dayElem.dateObj.getDay() === 0 || dayElem.dateObj.getDay() === 6) dayElem.classList.add("weekend-day");
+            if (data.holidays[rawKey]) {
+              dayElem.classList.add("holiday-day");
+              dayElem.setAttribute("title", data.holidays[rawKey]);
+            }
+          },
+          onChange: (selectedDates, dateStr) => {
+            if (!dateStr) return;
+            const targetKey = dateStr.replace(/-/g, '');
+            if (data.days[targetKey]) {
+              renderDay(targetKey);
+            } else {
+              alert("해당 일자의 데이터가 존재하지 않습니다.");
+            }
+          }
+        });
+
+        document.getElementById('btnLatest').addEventListener('click', () => {
+          renderDay(latestKey);
+        });
+
+        renderDay(latestKey);
+      })
+      .catch(err => {
+        console.error("데이터 로딩 실패:", err);
+        alert("데이터(data.json)를 불러오는데 실패했습니다.");
+      });
+  </script>
+</body>
+</html>
