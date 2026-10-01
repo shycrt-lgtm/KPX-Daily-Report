@@ -332,9 +332,14 @@
       document.getElementById('valMinSmp').textContent = d.smp_min.toFixed(2);
       document.getElementById('valMinDiff').textContent = `전일비 ${d.diff_min_txt}`;
       document.getElementById('valMinDiff').className = `text-[11px] font-semibold mt-1 ${d.diff_min_color}`;
-      document.getElementById('valPeakMw').textContent = Number(d.cap_peak).toLocaleString();
-      document.getElementById('valPeakTime').textContent = parseInt(d.cap_time, 10) + '시';
-      document.getElementById('valResRatio').textContent = Number(d.cap_res).toFixed(1);
+      // 전력수급 실적이 아직 확정되지 않은 날(전일 값을 임시로 쓴 날)은 숫자 대신 '집계중'으로 표시
+      const prov = !!d.cap_prov;
+      [['valPeakMw', Number(d.cap_peak).toLocaleString()], ['valPeakTime', parseInt(d.cap_time, 10) + '시'], ['valResRatio', Number(d.cap_res).toFixed(1)]].forEach(([id, txt]) => {
+        const el = document.getElementById(id), unit = el.nextElementSibling;
+        el.textContent = prov ? '집계중' : txt;
+        el.style.color = prov ? '#94a3b8' : '';
+        if (unit) unit.style.display = prov ? 'none' : '';
+      });
 
       const spread = d.smp_max - d.smp_min;
       document.getElementById('boxComment').innerHTML = `
@@ -347,7 +352,7 @@
       d.recent_7.forEach((r, idx) => {
         const bg = idx === 0 ? "bg-slate-50 font-bold" : "";
         const txt = r.is_holiday ? "text-holiday" : "";
-        tableHtml += `<tr class="${bg}"><td class="${txt}">${r.date}</td><td>${r.avg.toFixed(2)}</td><td>${r.max.toFixed(2)}</td><td>${r.min.toFixed(2)}</td><td>${Number(r.cap).toLocaleString()}</td><td>${Number(r.peak).toLocaleString()}</td><td>${r.time}</td><td>${Number(r.res).toFixed(1)}%</td></tr>`;
+        tableHtml += `<tr class="${bg}"><td class="${txt}">${r.date}</td><td>${r.avg.toFixed(2)}</td><td>${r.max.toFixed(2)}</td><td>${r.min.toFixed(2)}</td>${r.prov ? '<td colspan="4" style="color:#94a3b8">수급 실적 집계중</td>' : `<td>${Number(r.cap).toLocaleString()}</td><td>${Number(r.peak).toLocaleString()}</td><td>${r.time}</td><td>${Number(r.res).toFixed(1)}%</td>`}</tr>`;
       });
       document.getElementById('table7DaysBody').innerHTML = tableHtml;
 
