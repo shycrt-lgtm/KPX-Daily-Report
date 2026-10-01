@@ -358,8 +358,8 @@
         const nextArr = (MASTER_DATA.days[nk] && MASTER_DATA.days[nk].smp_hourly) || (SMP_LIVE && SMP_LIVE.days && SMP_LIVE.days[nk] && SMP_LIVE.days[nk].smp) || null;
         const isToday = nk === todayKeyKST();
         const md = k => `${+k.slice(4,6)}.${+k.slice(6,8)}`;
-        charts.smp.data.datasets[0].label = `${isToday ? '전일' : '당일'} SMP (${md(dateKey)})`;
-        charts.smp.data.datasets[1].label = `${isToday ? '금일' : '익일'} SMP (${md(nk)})`;
+        charts.smp.data.datasets[0].label = `전일 SMP`;
+        charts.smp.data.datasets[1].label = `금일 SMP`;
         charts.smp.data.datasets[1].data = nextArr || [];
         charts.smp.data.datasets[1].hidden = !nextArr;
       }
