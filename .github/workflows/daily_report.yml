@@ -2,7 +2,9 @@ name: Daily Report Automation
 
 on:
   schedule:
-    # KST 기준 매일 아침 08:30 (UTC 23:30) 자동 실행
+    # KST 기준 매일 00:00(UTC 15:00) — 전날 SMP·발전량이 먼저 올라오는 대로 반영
+    - cron: '0 15 * * *'
+    # KST 기준 매일 아침 08:30 (UTC 23:30) — 전력수급 실적 등 늦게 확정되는 값 반영
     - cron: '30 23 * * *'
   workflow_dispatch:
 
@@ -31,14 +33,20 @@ jobs:
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: |
-          # 🚨 backfill_generator.py 실행을 삭제하여 힘들게 모은 API 데이터가 지워지는 것을 방지함
+          # 🎉 backfill_generator.py 실행을 삭제하여 힘들게 모은 API 데이터가 지워지는 것을 방지함
           python build_report.py
+
+      - name: Make recent data (빠른 로딩용 data_recent.json)
+        run: python make_recent.py
 
       - name: Cleanup Old HTMLs and Commit SPA
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html data.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto: Update SPA master data.json [$(date +'%Y-%m-%d')]"
-          git pull --rebase origin main
-          git push origin main
+          git add index.html data.json data_recent.json
+          git diff --staged --quiet || git commit -m "Auto: Update SPA master data.json [$(date +'%Y-%m-%d')]"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && exit 0
+            echo "push 재시도 $i/5"; sleep 5
+          done
+          exit 1
