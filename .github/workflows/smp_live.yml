@@ -25,6 +25,7 @@ jobs:
         run: pip install requests
 
       - name: Collect SMP
+        continue-on-error: true   # 공공데이터포털이 일시적으로 느려도 아래 단계는 계속 진행
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python collect_smp_live.py
