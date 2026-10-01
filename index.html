@@ -105,7 +105,7 @@
     <div>
       <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
       <div class="chart-container"><canvas id="smpChart"></canvas></div>
-      <p class="text-xs text-slate-500 mt-2">점선: 실적일(전일) SMP, 굵은 실선: 다음날(금일) SMP — 하루전시장에서 전일 발표된 값입니다. 금일 값은 자동 수집 후 표시됩니다.</p>
+      <p class="text-xs text-slate-500 mt-2">굵은 실선: 실적일(전일) SMP, 점선: 다음날(금일) SMP — 하루전시장에서 전일 발표된 값입니다. 금일 값은 자동 수집 후 표시됩니다.</p>
     </div>
     <div>
       <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
@@ -176,8 +176,8 @@
       charts.smp = new Chart(document.getElementById('smpChart'), {
         type: 'line',
         data: { labels: labels, datasets: [
-          { label: '전일 SMP', data: [], pointStyle: 'line', borderColor: '#5b8db8', backgroundColor: '#5b8db8', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 5, tension: 0.1, order: 2 },
-          { label: '금일 SMP', data: [], pointStyle: 'line', borderColor: '#001f3f', backgroundColor: '#001f3f', borderWidth: 3.5, pointRadius: 3, pointHoverRadius: 6, tension: 0.1, hidden: true, order: 1 }
+          { label: '전일 SMP', data: [], pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3.5, pointRadius: 3, pointHoverRadius: 6, tension: 0.1, order: 1 },
+          { label: '금일 SMP', data: [], pointStyle: 'line', borderColor: '#64748b', backgroundColor: '#64748b', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 5, tension: 0.1, hidden: true, order: 2 }
         ] },
         options: {
           ...commonOptions,
