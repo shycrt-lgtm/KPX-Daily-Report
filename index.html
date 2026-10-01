@@ -13,6 +13,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Noto Sans KR', sans-serif; background-color: #ffffff; color: #1a1a1a; }
+    .site-header{position:sticky;top:0;z-index:100;background:#001f3f;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+    .site-header .in{max-width:72rem;margin:0 auto;padding:18px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .site-header h1{margin:0;font-size:28px;font-weight:900;letter-spacing:-.02em;color:#fff}
+    .site-header .sub{margin:4px 0 0;font-size:13px;color:#b6c2d1}
+    .site-header .sub b{color:#fff;font-weight:700}
+    .menu{display:flex;gap:10px;flex-wrap:wrap}
+    .menu a{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:2px;background:#e5e7eb;color:#1e293b;font-size:14px;font-weight:700;text-decoration:none;transition:background .15s}
+    .menu a:hover{background:#f1f5f9}
+    .menu a span{font-size:16px;line-height:1}
+    @media (max-width:640px){ .site-header h1{font-size:22px} .menu{width:100%} .menu a{flex:1;justify-content:center;padding:10px 12px;font-size:13px} }
     .mckinsey-border { border-top: 4px solid #001f3f; }
     .chart-container { position: relative; height: 450px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }
     table th, table td { border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }
@@ -26,22 +36,23 @@
     .flatpickr-calendar .flatpickr-weekday:first-child, .flatpickr-calendar .flatpickr-weekday:last-child { color: #dc2626 !important; font-weight: 700; }
   </style>
 </head>
-<body class="p-4 md:p-8">
-  <div class="max-w-6xl mx-auto space-y-8">
-    <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+<body>
+  <header class="site-header">
+    <div class="in">
       <div>
-        <a href="https://shycrt-lgtm.github.io/Energy-Index/" class="text-xs font-bold text-slate-400 hover:text-slate-700">← 처음 화면</a>
-        <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
-        <p class="text-sm text-slate-500 mt-1">기준일: <strong id="headerDisplayDate" class="text-slate-800 font-bold">로딩 중...</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
+        <h1>전력시장 전일실적 요약</h1>
+        <p class="sub">기준일: <b id="headerDisplayDate">로딩 중...</b> | 육지 기준 | 에너지사업총괄</p>
       </div>
+      <nav class="menu">
+        <a href="https://shycrt-lgtm.github.io/Energy-Index/">에너지 시장 주요정보 <span>›</span></a>
+        <a href="https://shycrt-lgtm.github.io/tms-monitor/">발전상황 모니터링 <span>›</span></a>
+      </nav>
+    </div>
+  </header>
 
+  <div class="max-w-6xl mx-auto space-y-8 p-4 md:p-8">
+    <div class="flex justify-end">
       <div class="flex flex-col md:items-end gap-2">
-        <div class="flex flex-wrap items-center gap-1.5">
-          <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 바로가기:</span>
-          <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs">⚡ 실시간 수급현황</a>
-          <a href="smp_live.html" class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs">📈 실시간 SMP</a>
-        </div>
-
         <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
           <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
           <div class="relative flex items-center">
