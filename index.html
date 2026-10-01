@@ -237,49 +237,19 @@
       });
     }
 
-    // 전일 발전원별 실적 요약문 (개조식) — 선택한 일자의 발전량 자료(d.gen)로 매번 새로 생성
+    // 발전량 비중(전력계통 기준) 한 줄 요약 — 선택한 일자의 발전량 자료(d.gen)로 매번 새로 생성
     function genSummaryHtml(g) {
       const num = v => Number(v) || 0;
       const sum = a => (a || []).reduce((s, v) => s + num(v), 0);
-      const avg = a => sum(a) / 24;
-      const gw = v => (v / 1000).toFixed(1) + 'GW';
-      const hr = i => (i + 1) + '시';
-      const idxMax = a => a.reduce((b, v, i) => (num(v) > num(a[b]) ? i : b), 0);
-      const idxMin = a => a.reduce((b, v, i) => (num(v) < num(a[b]) ? i : b), 0);
-      if (!g || !g.nuclear || sum(g.nuclear) + sum(g.coal) + sum(g.gas) <= 0) {
-        return '<li><strong>전원구성 :</strong> 발전원별 자료 없음</li>';
-      }
-      const pumpGen = g.pump_gen || [], essDis = g.ess_dis || [];
+      const title = '<strong>발전량비중(전력계통) :</strong>';
+      if (!g || sum(g.nuclear) + sum(g.coal) + sum(g.gas) <= 0) return `<li>${title} 발전원별 자료 없음</li>`;
       const groups = [
         ['원자력', sum(g.nuclear)], ['석탄', sum(g.coal)], ['LNG', sum(g.gas)],
         ['태양광·풍력', sum(g.solar) + sum(g.wind)],
-        ['기타(유류·수력·양수·ESS)', sum(g.oil) + sum(g.hydro) + sum(pumpGen) + sum(essDis)]
+        ['기타(유류·수력·양수·ESS)', sum(g.oil) + sum(g.hydro) + sum(g.pump_gen) + sum(g.ess_dis)]
       ];
       const total = groups.reduce((s, x) => s + x[1], 0) || 1;
-      const mix = groups.map(x => `${x[0]} ${(x[1] / total * 100).toFixed(0)}%`).join(', ');
-      const net = g.net_load || [];
-      const nMin = idxMin(net), nMax = idxMax(net);
-      const gas = g.gas || [];
-      const gMin = idxMin(gas), gMax = idxMax(gas);
-      const sol = g.solar || [];
-      const sMax = idxMax(sol);
-      const lines = [];
-      lines.push(`발전량 비중(계통기준): ${mix}`);
-      lines.push(`기저발전: 원자력 일평균 ${gw(avg(g.nuclear))}${(num(g.nuclear[idxMax(g.nuclear)]) - num(g.nuclear[idxMin(g.nuclear)])) >= 300 ? `(최저 ${gw(num(g.nuclear[idxMin(g.nuclear)]))}~최대 ${gw(num(g.nuclear[idxMax(g.nuclear)]))})` : '(일중 변동 미미)'}, 석탄 일평균 ${gw(avg(g.coal))}(최저 ${hr(idxMin(g.coal))} ${gw(num(g.coal[idxMin(g.coal)]))}, 최대 ${hr(idxMax(g.coal))} ${gw(num(g.coal[idxMax(g.coal)]))})`);
-      lines.push(`LNG: 일평균 ${gw(avg(gas))}, 최저 ${hr(gMin)} ${gw(num(gas[gMin]))}, 최대 ${hr(gMax)} ${gw(num(gas[gMax]))}(일중 변동폭 ${gw(num(gas[gMax]) - num(gas[gMin]))})`);
-      lines.push(`태양광·풍력: 태양광 최대 ${hr(sMax)} ${gw(num(sol[sMax]))}, 풍력 일평균 ${Math.round(avg(g.wind)).toLocaleString()}MW`);
-      lines.push(`순부하(태양광·풍력 제외): 최저 ${hr(nMin)} ${gw(num(net[nMin]))}, 최대 ${hr(nMax)} ${gw(num(net[nMax]))}(일중 변동폭 ${gw(num(net[nMax]) - num(net[nMin]))})`);
-      const pl = g.pump_load || [], ec = g.ess_chg || [];
-      const pMin = idxMin(pl), pMax = idxMax(pumpGen);
-      const parts = [];
-      if (num(pl[pMin]) < -1) parts.push(`양수 펌핑 최대 ${hr(pMin)} ${Math.abs(Math.round(num(pl[pMin]))).toLocaleString()}MW`);
-      if (num(pumpGen[pMax]) > 1) parts.push(`양수 발전 최대 ${hr(pMax)} ${Math.round(num(pumpGen[pMax])).toLocaleString()}MW`);
-      if (sum(essDis) > 1 || sum(ec) < -1) {
-        parts.push(`ESS 충전 최대 ${hr(idxMin(ec))} ${Math.abs(Math.round(num(ec[idxMin(ec)]))).toLocaleString()}MW, 방전 최대 ${hr(idxMax(essDis))} ${Math.round(num(essDis[idxMax(essDis)])).toLocaleString()}MW`);
-      }
-      if (parts.length) lines.push(`양수·ESS: ${parts.join(', ')}`);
-      return `<li><strong>전원구성 :</strong> ${lines[0].replace('발전량 비중(계통기준): ', '발전량 비중(계통기준) ')}` +
-        lines.slice(1).map(t => `<span class="pl-4 text-slate-600 block mt-1">- ${t}</span>`).join('') + `</li>`;
+      return `<li>${title} ${groups.map(x => `${x[0]} ${(x[1] / total * 100).toFixed(0)}%`).join(', ')}</li>`;
     }
 
     function renderDay(dateKey) {
