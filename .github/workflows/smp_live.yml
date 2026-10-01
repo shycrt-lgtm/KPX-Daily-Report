@@ -29,11 +29,14 @@ jobs:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python collect_smp_live.py
 
+      - name: Make recent data (빠른 로딩용 data_recent.json)
+        run: python make_recent.py
+
       - name: Commit smp_live.json
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add smp_live.json
+          git add smp_live.json data_recent.json
           git diff --staged --quiet || git commit -m "Auto: SMP live [$(date +'%Y-%m-%d %H:%M')]"
           git pull --rebase origin main
           git push origin main
