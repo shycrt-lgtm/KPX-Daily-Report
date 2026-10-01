@@ -326,6 +326,7 @@ def build_day_payload(d_str, land_smp, prev_day_data, cap=None, smp_avg=None, av
     while right < 23 and land_smp[right+1] >= thresh: right += 1
     if (right - left) > 6: left = max(0, max_idx - 2); right = min(23, max_idx + 2)
 
+    prov = (not cap) or bool(cap.get("prov"))  # True: KPX 전력수급 실적 미확인(전일 값 임시 사용) → 화면에 '집계중' 표시
     if cap:
         cap_cap, cap_peak, cap_time, cap_res = cap["cap"], cap["peak"], cap["time"], cap["res"]
     else:
@@ -340,6 +341,8 @@ def build_day_payload(d_str, land_smp, prev_day_data, cap=None, smp_avg=None, av
         'avg': smp_avg, 'max': smp_max, 'min': smp_min,
         'cap': cap_cap, 'peak': cap_peak, 'time': cap_time, 'res': cap_res
     }]
+    if prov:
+        recent_7[0]['prov'] = True
     for delta in range(1, 7):
         p_dt = d_dt - timedelta(days=delta)
         p_k = p_dt.strftime("%Y%m%d")
@@ -351,6 +354,8 @@ def build_day_payload(d_str, land_smp, prev_day_data, cap=None, smp_avg=None, av
                 'avg': p_info["smp_avg"], 'max': p_info["smp_max"], 'min': p_info["smp_min"],
                 'cap': _day_cap(p_info), 'peak': p_info["cap_peak"], 'time': p_info["cap_time"], 'res': p_info["cap_res"]
             })
+            if p_info.get("cap_prov"):
+                recent_7[-1]['prov'] = True
 
     diff_avg_val = round(smp_avg - recent_7[1]["avg"], 2) if len(recent_7) > 1 else 0.0
     diff_max_val = round(smp_max - recent_7[1]["max"], 2) if len(recent_7) > 1 else 0.0
@@ -377,6 +382,8 @@ def build_day_payload(d_str, land_smp, prev_day_data, cap=None, smp_avg=None, av
         'diff_min_txt': diff_min_txt, 'diff_min_color': diff_min_color,
         'recent_7': recent_7, 'gen': prev_day_data.get("gen", default_gen)
     }
+    if prov:
+        payload['cap_prov'] = True
     if avg_basis:
         payload['smp_basis'] = avg_basis
     if gen_info:
@@ -853,7 +860,8 @@ for d in window:  # 날짜 오름차순: 앞선 날 보정이 뒤 날의 전일�
         continue
     if not cap_same:
         print(f">> [전력수급 보정] {d}: 최대전력 {day.get('cap_peak')}→{k['peak']}MW, 예비율 {day.get('cap_res')}→{k['res']}%")
-    cap = k if k else {"cap": _day_cap(day), "peak": day.get("cap_peak"), "time": day.get("cap_time"), "res": day.get("cap_res")}
+    cap = k if k else {"cap": _day_cap(day), "peak": day.get("cap_peak"), "time": day.get("cap_time"), "res": day.get("cap_res"),
+                       "prov": bool(day.get("cap_prov"))}
     avg, basis = fixed_avg.get(d, (day.get("smp_avg"), day.get("smp_basis")))
     master["days"][d] = build_day_payload(d, day["smp_hourly"], {"gen": day.get("gen", default_gen)}, cap=cap,
                                           smp_avg=avg, avg_basis=basis, gen_info=gen_updates.get(d))
