@@ -30,6 +30,7 @@
   <div class="max-w-6xl mx-auto space-y-8">
     <div class="mckinsey-border pt-4 pb-2 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
       <div>
+        <a href="https://shycrt-lgtm.github.io/Energy-Index/" class="text-xs font-bold text-slate-400 hover:text-slate-700">← 처음 화면</a>
         <h1 class="text-3xl font-black text-slate-900 tracking-tight">전력시장 전일실적 요약</h1>
         <p class="text-sm text-slate-500 mt-1">기준일: <strong id="headerDisplayDate" class="text-slate-800 font-bold">로딩 중...</strong> | 육지 기준 | <span class="font-bold text-slate-700">에너지사업총괄</span></p>
       </div>
@@ -38,7 +39,7 @@
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11px] font-bold text-slate-400 mr-0.5">KPX 바로가기:</span>
           <a href="https://new.kpx.or.kr/powerSource.es?mid=a10404030000&device=chart" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold rounded shadow-xs">⚡ 실시간 수급현황</a>
-          <a href="https://new.kpx.or.kr/smpInland.es?mid=a10404080100&device=pc" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs">📈 실시간 SMP</a>
+          <a href="smp_live.html" class="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 text-sky-900 border border-sky-300 text-xs font-bold rounded shadow-xs">📈 실시간 SMP</a>
         </div>
 
         <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
@@ -104,6 +105,7 @@
     <div>
       <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
       <div class="chart-container"><canvas id="smpChart"></canvas></div>
+      <p class="text-xs text-slate-500 mt-2">점선: 실적일(전일) SMP, 굵은 실선: 다음날(금일) SMP — 하루전시장에서 전일 발표된 값입니다. 금일 값은 자동 수집 후 표시됩니다.</p>
     </div>
     <div>
       <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
@@ -173,11 +175,14 @@
     function initCharts() {
       charts.smp = new Chart(document.getElementById('smpChart'), {
         type: 'line',
-        data: { labels: labels, datasets: [{ label: '시간대별 SMP (원/kWh)', data: [], pointStyle: 'line', borderColor: '#005587', backgroundColor: '#005587', borderWidth: 3, pointRadius: 3, pointHoverRadius: 6, tension: 0.1 }] },
+        data: { labels: labels, datasets: [
+          { label: '전일 SMP', data: [], pointStyle: 'line', borderColor: '#5b8db8', backgroundColor: '#5b8db8', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 5, tension: 0.1, order: 2 },
+          { label: '금일 SMP', data: [], pointStyle: 'line', borderColor: '#001f3f', backgroundColor: '#001f3f', borderWidth: 3.5, pointRadius: 3, pointHoverRadius: 6, tension: 0.1, hidden: true, order: 1 }
+        ] },
         options: {
           ...commonOptions,
           scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, title: { display: true, text: '원/kWh' }, grace: '20%' } },
-          plugins: { ...commonOptions.plugins, tooltip: { ...commonOptions.plugins.tooltip, callbacks: { label: ctx => ' ' + Number(ctx.raw).toFixed(2) + '원/kWh' } }, annotation: { annotations: {} } }
+          plugins: { ...commonOptions.plugins, tooltip: { ...commonOptions.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + Number(ctx.raw).toFixed(2) + '원/kWh' } }, annotation: { annotations: {} } }
         }
       });
 
@@ -252,6 +257,15 @@
       return `<li>${title} ${groups.map(x => `${x[0]} ${(x[1] / total * 100).toFixed(0)}%`).join(', ')}</li>`;
     }
 
+    let SMP_LIVE = null;
+    function addDaysKey(k, n) {
+      const d = new Date(Date.UTC(+k.slice(0,4), +k.slice(4,6) - 1, +k.slice(6,8) + n));
+      return d.toISOString().slice(0,10).replace(/-/g, '');
+    }
+    function todayKeyKST() {
+      return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0,10).replace(/-/g, '');
+    }
+
     function renderDay(dateKey) {
       if (!MASTER_DATA || !MASTER_DATA.days[dateKey]) return;
       const d = MASTER_DATA.days[dateKey];
@@ -315,6 +329,17 @@
       document.getElementById('table7DaysBody').innerHTML = tableHtml;
 
       charts.smp.data.datasets[0].data = d.smp_hourly;
+      {
+        // 선택한 일자의 다음날 SMP: data.json 에 있으면 그것을, 없으면 smp_live.json(전일·오늘)에서 찾는다
+        const nk = addDaysKey(dateKey, 1);
+        const nextArr = (MASTER_DATA.days[nk] && MASTER_DATA.days[nk].smp_hourly) || (SMP_LIVE && SMP_LIVE.days && SMP_LIVE.days[nk] && SMP_LIVE.days[nk].smp) || null;
+        const isToday = nk === todayKeyKST();
+        const md = k => `${+k.slice(4,6)}.${+k.slice(6,8)}`;
+        charts.smp.data.datasets[0].label = `${isToday ? '전일' : '당일'} SMP (${md(dateKey)})`;
+        charts.smp.data.datasets[1].label = `${isToday ? '금일' : '익일'} SMP (${md(nk)})`;
+        charts.smp.data.datasets[1].data = nextArr || [];
+        charts.smp.data.datasets[1].hidden = !nextArr;
+      }
       const peakAnnotation = { type: 'box', xMin: d.peak_left, xMax: d.peak_right, backgroundColor: 'rgba(217, 63, 60, 0.08)', borderWidth: 0, label: { display: true, content: `${d.peak_band} 피크`, position: 'top', color: '#d93f3c', font: {size: 11, weight: 'bold'} } };
       charts.smp.options.plugins.annotation.annotations = {
         peakBox: peakAnnotation,
@@ -357,9 +382,12 @@
       charts.spread.update('none');
     }
 
-    fetch('data.json?t=' + new Date().getTime())
-      .then(res => res.json())
-      .then(data => {
+    Promise.all([
+      fetch('data.json?t=' + new Date().getTime()).then(res => res.json()),
+      fetch('smp_live.json?t=' + new Date().getTime()).then(res => res.json()).catch(() => null)
+    ])
+      .then(([data, live]) => {
+        SMP_LIVE = live;
         MASTER_DATA = data;
         initCharts();
 
