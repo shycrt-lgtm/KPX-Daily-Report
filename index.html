@@ -394,9 +394,18 @@
       charts.spread.update('none');
     }
 
+    // 처음에는 최근 60일만 담은 작은 파일(data_recent.json)을 읽고, 없으면 전체(data.json)를 읽는다.
+    let FULL_LOADED = false;
+    const getJson = (u) => fetch(u, { cache: 'no-cache' }).then(res => { if (!res.ok) throw new Error(u + ' ' + res.status); return res.json(); });
+    async function loadFull() {
+      if (FULL_LOADED) return;
+      const full = await getJson('data.json');
+      MASTER_DATA.days = Object.assign({}, full.days, MASTER_DATA.days);
+      FULL_LOADED = true;
+    }
     Promise.all([
-      fetch('data.json?t=' + new Date().getTime()).then(res => res.json()),
-      fetch('smp_live.json?t=' + new Date().getTime()).then(res => res.json()).catch(() => null)
+      getJson('data_recent.json').catch(() => { FULL_LOADED = true; return getJson('data.json'); }),
+      getJson('smp_live.json').catch(() => null)
     ])
       .then(([data, live]) => {
         SMP_LIVE = live;
@@ -422,11 +431,14 @@
           onChange: (selectedDates, dateStr) => {
             if (!dateStr) return;
             const targetKey = dateStr.replace(/-/g, '');
-            if (data.days[targetKey]) {
-              renderDay(targetKey);
-            } else {
-              alert("해당 일자의 데이터가 존재하지 않습니다.");
-            }
+            const show = () => {
+              if (MASTER_DATA.days[targetKey]) renderDay(targetKey);
+              else alert("해당 일자의 데이터가 존재하지 않습니다.");
+            };
+            if (MASTER_DATA.days[targetKey] || FULL_LOADED) { show(); return; }
+            const badge = document.getElementById('badgeWeekday'); const prev = badge.textContent;
+            badge.textContent = '불러오는 중…';
+            loadFull().then(show).catch(() => alert("과거 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")).finally(() => { if (badge.textContent === '불러오는 중…') badge.textContent = prev; });
           }
         });
 
