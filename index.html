@@ -14,7 +14,7 @@
   <style>
     body { font-family: 'Noto Sans KR', sans-serif; background-color: #ffffff; color: #1a1a1a; }
     .site-header{position:sticky;top:0;z-index:100;background:#001f3f;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18)}
-    .site-header .in{max-width:72rem;margin:0 auto;padding:18px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .site-header .in{max-width:1000px;margin:0 auto;padding:18px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
     .site-header h1{margin:0;font-size:28px;font-weight:900;letter-spacing:-.02em;color:#fff}
     .site-header .sub{margin:4px 0 0;font-size:13px;color:#b6c2d1}
     .site-header .sub b{color:#fff;font-weight:700}
@@ -28,7 +28,8 @@
     table th, table td { border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }
     table th { background-color: #f8fafc; font-weight: 700; color: #334155; }
     .text-holiday { color: #dc2626 !important; font-weight: 700; }
-    h2 { font-size: 1.125rem; font-weight: 700; color: #001f3f; margin-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+    h2 { display:flex; align-items:center; font-size:18px; font-weight:700; color:#001f3f; margin:30px 0 10px; padding-bottom:8px; border-bottom:2px solid #e5e7eb; }
+    h2::before { content:''; flex:none; width:6px; height:18px; margin-right:9px; background:#001f3f; }
     .flatpickr-calendar { border: 1px solid #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); }
     .flatpickr-calendar .flatpickr-day.holiday-day, .flatpickr-calendar .flatpickr-day.weekend-day { color: #dc2626 !important; font-weight: 700 !important; }
     .flatpickr-calendar .flatpickr-day.holiday-day::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background-color: #dc2626; }
@@ -40,7 +41,7 @@
   <header class="site-header">
     <div class="in">
       <div>
-        <h1>전력시장 전일실적 요약</h1>
+        <h1>전력시장 전일실적</h1>
         <p class="sub">기준일: <b id="headerDisplayDate">로딩 중...</b> | 육지 기준 | 에너지사업총괄</p>
       </div>
       <nav class="menu">
@@ -50,7 +51,7 @@
     </div>
   </header>
 
-  <div class="max-w-6xl mx-auto space-y-8 p-4 md:p-8">
+  <div class="mx-auto" style="max-width:1000px;padding:28px 16px 48px">
     <div class="flex justify-end">
       <div class="flex flex-col md:items-end gap-2">
         <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
@@ -70,12 +71,12 @@
     </div>
 
     <div>
-      <h2>00. Executive Summary</h2>
+      <h2>Executive Summary</h2>
       <div id="boxSummary" class="bg-slate-50 border border-slate-200 p-6 text-base md:text-lg text-slate-800 leading-relaxed font-medium">로딩 중...</div>
     </div>
 
     <div>
-      <h2>01. 전일 전력시장 실적요약</h2>
+      <h2>전일 전력시장 실적요약</h2>
       <div class="grid grid-cols-2 md:grid-cols-7 gap-0 border border-slate-200">
         <div class="p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-center bg-slate-50">
           <p class="text-xs font-bold text-slate-500 mb-1">LNG 단가 (당월)</p>
@@ -114,12 +115,12 @@
     </div>
 
     <div>
-      <h2>02. 시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
+      <h2>시간대별 계통한계가격(SMP) 및 피크 밴드</h2>
       <div class="chart-container"><canvas id="smpChart"></canvas></div>
       <p class="text-xs text-slate-500 mt-2">굵은 실선: 실적일(전일) SMP, 점선: 다음날(금일) SMP — 하루전시장에서 전일 발표된 값입니다. 금일 값은 자동 수집 후 표시됩니다.</p>
     </div>
     <div>
-      <h2>03. 최근 7일 전력수급 및 SMP 실적</h2>
+      <h2>최근 7일 전력수급 및 SMP 실적</h2>
       <div class="overflow-x-auto">
         <table class="w-full border-collapse">
           <thead>
@@ -131,15 +132,15 @@
       </div>
     </div>
     <div>
-      <h2>04. 발전원별 실시간 수급 구성 및 순부하</h2>
+      <h2>발전원별 실시간 수급 구성 및 순부하</h2>
       <div class="chart-container"><canvas id="generationChart"></canvas></div>
     </div>
     <div>
-      <h2>05. 주요 발전원 시간대별 출력 추이</h2>
+      <h2>주요 발전원 시간대별 출력 추이</h2>
       <div class="chart-container"><canvas id="sourceLineChart"></canvas></div>
     </div>
     <div>
-      <h2>06. SMP 스프레드</h2>
+      <h2>SMP 스프레드</h2>
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
       <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
     </div>
