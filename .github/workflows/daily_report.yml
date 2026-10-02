@@ -13,6 +13,10 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: kpx-data
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -36,6 +40,12 @@ jobs:
           # 🎉 backfill_generator.py 실행을 삭제하여 힘들게 모은 API 데이터가 지워지는 것을 방지함
           python build_report.py
 
+      - name: Apply KPX SMP (전력거래소 홈페이지 값으로 SMP 맞춤)
+        continue-on-error: true
+        run: |
+          python collect_kpx_smp.py
+          python apply_kpx_smp.py
+
       - name: Make recent data (빠른 로딩용 data_recent.json)
         run: python make_recent.py
 
@@ -43,7 +53,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html data.json data_recent.json
+          git add index.html data.json data_recent.json smp_live.json
           git diff --staged --quiet || git commit -m "Auto: Update SPA master data.json [$(date +'%Y-%m-%d')]"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main && exit 0
