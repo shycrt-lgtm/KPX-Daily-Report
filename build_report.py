@@ -478,9 +478,14 @@ def fetch_land_smp(trade_date, attempts=3, use_curl_fallback=True):
     return [by_hour[h] for h in hours]
 
 
+KPX_WAVG = {}  # {일자: 전력거래소 홈페이지가 공표한 가중평균}
+
+
 def smp_avg_for(d_str, smp):
     """KPX 공표 '가중평균'과 같은 방식: 시간대별 SMP를 육지 수요예측(MW)으로 가중평균 (2022~2026 공표값과 비교 시 0.01원 이내 일치).
     수요예측이 없으면 단순평균으로 대체하고 기준을 'mean'으로 표시."""
+    if d_str in KPX_WAVG:
+        return KPX_WAVG[d_str], "weighted"
     w = LAND_MLFD.get(d_str)
     if w and len(w) == len(smp):
         return round(sum(p * q for p, q in zip(smp, w)) / sum(w), 2), "weighted"
@@ -797,6 +802,19 @@ def build_gen_updates_kpx(need_days, vday):
 
 
 api_smp = fetch_land_smp(target_date_str)
+
+# 공공데이터포털(API)은 당일 값이 하루 가까이 늦게 올라오므로, 못 받으면 전력거래소 홈페이지에서 모은 값(smp_live.json)으로 대신한다.
+if not api_smp:
+    try:
+        with open("smp_live.json", encoding="utf-8") as _f:
+            _day = (json.load(_f).get("days") or {}).get(target_date_str) or {}
+        _arr = _day.get("smp") or []
+        if _day.get("src") == "kpx" and len(_arr) == 24 and _day.get("wavg"):
+            api_smp = [float(v) for v in _arr]
+            KPX_WAVG[target_date_str] = float(_day["wavg"])
+            print(f">> [SMP 대체] 공공데이터포털에 {target_date_str} 자료가 없어 전력거래소 홈페이지 값(가중평균 {_day['wavg']}원)으로 반영합니다.")
+    except Exception as _e:
+        print(f">> [SMP 대체 실패] {type(_e).__name__}: {_e}")
 
 if not api_smp:
     print(f"🚨 {target_date_str} SMP 수집 실패. 위 로그의 원인을 확인하세요. (data.json은 변경하지 않음)")
