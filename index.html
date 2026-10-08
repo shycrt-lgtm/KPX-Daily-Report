@@ -32,7 +32,8 @@
     .menu a{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:190px;height:44px;padding:0;border-radius:2px;background:#e5e7eb;color:#1e293b;font-size:14px;font-weight:700;text-decoration:none;transition:background .15s}
     .menu a:hover{background:#f1f5f9}
     .menu a span{font-size:16px;line-height:1}
-    @media (max-width:640px){ .site-header h1{font-size:22px} .menu{width:100%} .menu a{flex:1;width:auto;height:40px;padding:0 12px;font-size:13px} }
+    .mb{display:none}
+  @media (max-width:640px){ .mb{display:inline} .menu a{text-align:center;line-height:1.25;gap:4px;height:48px!important;padding:0 6px!important} .menu a span{display:none} .site-header h1{font-size:22px} .menu{width:100%} .menu a{flex:1;width:auto;height:40px;padding:0 12px;font-size:13px} }
     .mckinsey-border { border-top: 4px solid #001f3f; }
     .chart-container { position: relative; height: 450px; width: 100%; border: 1px solid #e5e7eb; padding: 1rem; background-color: #ffffff; }
     table th, table td { border: 1px solid #e5e7eb; padding: 12px; text-align: center; font-size: 0.875rem; }
@@ -55,9 +56,9 @@
         <p class="sub">기준일: <b id="headerDisplayDate">로딩 중...</b> | 육지 기준 | 에너지사업총괄</p>
       </div>
       <nav class="menu">
-        <a href="https://shycrt-lgtm.github.io/Energy-Index/">에너지 시장 주요정보 <span>›</span></a>
+        <a href="https://shycrt-lgtm.github.io/Energy-Index/">에너지 시장<br class="mb"> 주요정보 <span>›</span></a>
         <a href="https://shycrt-lgtm.github.io/TMS/">TMS <span>›</span></a>
-        <a href="https://shycrt-lgtm.github.io/Energy-Price/#home">에너지 단가 <span>›</span></a>
+        <a href="https://shycrt-lgtm.github.io/Energy-Price/#home">에너지<br class="mb"> 단가 <span>›</span></a>
       </nav>
     </div>
   </header>
