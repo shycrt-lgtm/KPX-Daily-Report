@@ -41,6 +41,10 @@
     .text-holiday { color: #dc2626 !important; font-weight: 700; }
     body h2 { display:flex; align-items:center; font-size:18px; font-weight:700; color:#001f3f; margin:30px 0 10px; padding-bottom:8px; border-bottom:2px solid #e5e7eb; }
     body h2::before { content:''; flex:none; width:6px; height:18px; margin-right:9px; background:#001f3f; }
+    .etc-menu{display:flex;gap:10px;flex-wrap:wrap}
+    .etc-menu a{display:inline-flex;align-items:center;justify-content:center;min-width:150px;height:44px;padding:0 20px;border-radius:2px;background:#e5e7eb;color:#1e293b;font-size:14px;font-weight:700;text-decoration:none;transition:background .15s;white-space:nowrap}
+    .etc-menu a:hover{background:#f1f5f9}
+    @media (max-width:640px){ .etc-menu a{flex:1 1 calc(50% - 5px);min-width:0;padding:0 8px} }
     .flatpickr-calendar { border: 1px solid #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); }
     .flatpickr-calendar .flatpickr-day.holiday-day, .flatpickr-calendar .flatpickr-day.weekend-day { color: #dc2626 !important; font-weight: 700 !important; }
     .flatpickr-calendar .flatpickr-day.holiday-day::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background-color: #dc2626; }
@@ -65,8 +69,7 @@
 
   <div class="mx-auto" style="max-width:1000px;padding:28px 16px 48px">
     <div class="flex" style="justify-content:space-between;align-items:stretch;gap:10px 12px;flex-wrap:wrap">
-      <style>/* 조회일자 상자: TMS·Energy-Index와 같은 치수 */.kpx-pick,.kpx-pick label,.kpx-pick input,.kpx-pick #badgeWeekday,.kpx-pick #btnLatest{line-height:normal}.kpx-pick input{padding:1px 24px 1px 2px}.kpx-pick .border-l{margin-left:4px}.kpx-pick #btnLatest{padding:7px 12px;gap:0}#btnMerit{background:#005587;border-radius:0}#btnMerit:hover{background:#003f66}</style>
-      <a href="./merit.html" id="btnMerit" class="inline-flex items-center justify-center text-white text-sm font-bold shadow-sm transition" style="padding:0 20px;min-height:40px;white-space:nowrap">급전순위</a>
+      <style>/* 조회일자 상자: TMS·Energy-Index와 같은 치수 */.kpx-pick,.kpx-pick label,.kpx-pick input,.kpx-pick #badgeWeekday,.kpx-pick #btnLatest{line-height:normal}.kpx-pick input{padding:1px 24px 1px 2px}.kpx-pick .border-l{margin-left:4px}.kpx-pick #btnLatest{padding:7px 12px;gap:0}</style>
       <div class="flex flex-col md:items-end gap-2" style="flex-shrink:0;margin-left:auto">
         <div class="kpx-pick flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
           <label for="historyDate" class="text-xs md:text-sm font-bold text-slate-700 cursor-pointer">조회일자:</label>
@@ -153,6 +156,13 @@
       <h2>SMP 스프레드</h2>
       <div class="chart-container"><canvas id="spreadChart"></canvas></div>
       <p class="text-[11px] text-slate-500 mt-2 px-1 tracking-tight">* 참고: 차트 안정성을 위해 양수 및 ESS의 충방전 총합을 순공급(Net Supply) 기준으로 환산 표기했습니다.</p>
+    </div>
+    <div>
+      <h2>기타사항</h2>
+      <!-- 메뉴를 더 추가하려면 아래에 <a href="주소">이름</a> 한 줄을 추가하세요 -->
+      <nav class="etc-menu">
+        <a href="./merit.html" id="btnMerit">급전순위</a>
+      </nav>
     </div>
   </div>
 
