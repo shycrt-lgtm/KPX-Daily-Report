@@ -16,11 +16,16 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 지운 원본 엑셀을 변경 기록에서 꺼내기 위해 전체 기록을 받음
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install pandas openpyxl
 
       - name: 과거 석탄 발전량 보정
         run: python fix_coal.py
