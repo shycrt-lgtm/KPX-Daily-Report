@@ -1,0 +1,42 @@
+name: Fix Coal (1회 실행)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kpx-data
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 과거 석탄 발전량 보정
+        run: python fix_coal.py
+
+      - name: Make recent data
+        run: python make_recent.py
+
+      - name: Commit
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json data_recent.json
+          git diff --staged --quiet && exit 0
+          git commit -m "Fix: 과거 석탄 발전량 보정"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && exit 0
+            echo "push 재시도 $i/5"; sleep 5
+          done
+          exit 1
