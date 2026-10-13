@@ -76,7 +76,10 @@ for gf in sorted(glob.glob("*발전원별 발전량_*.xlsx")):
         if len(g_df) < 24: continue
         g_df = g_df.sort_values('시')
         nuc = g_df['원자력'].tolist() if '원자력' in g_df else [0.0]*24
-        coal = (g_df['석탄'] if '석탄' in g_df else (g_df['유연탄'] + g_df['국내탄'] if '유연탄' in g_df else [0.0]*24)).tolist()
+        # '석탄' 열이 있어도 비어 있는(0) 기간이 있으므로, 그 시간은 유연탄+국내탄으로 채움
+        _s = g_df['석탄'] if '석탄' in g_df else pd.Series([0.0]*len(g_df), index=g_df.index)
+        _u = (g_df['유연탄'] if '유연탄' in g_df else 0.0) + (g_df['국내탄'] if '국내탄' in g_df else 0.0)
+        coal = _s.where(_s > 0, _u).tolist()
         oil = g_df['유류'].tolist() if '유류' in g_df else [0.0]*24
         gas = g_df['가스'].tolist() if '가스' in g_df else [0.0]*24
         hydro = g_df['수력'].tolist() if '수력' in g_df else [0.0]*24
