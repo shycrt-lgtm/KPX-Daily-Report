@@ -1,0 +1,166 @@
+{
+ "months": {
+  "202501": {
+   "land": 117.11,
+   "jeju": 118.9,
+   "total": 117.13,
+   "first_seen": null,
+   "history": []
+  },
+  "202502": {
+   "land": 116.39,
+   "jeju": 116.05,
+   "total": 116.39,
+   "first_seen": null,
+   "history": []
+  },
+  "202503": {
+   "land": 113.12,
+   "jeju": 105.57,
+   "total": 113.03,
+   "first_seen": null,
+   "history": []
+  },
+  "202504": {
+   "land": 124.63,
+   "jeju": 120.24,
+   "total": 124.58,
+   "first_seen": null,
+   "history": []
+  },
+  "202505": {
+   "land": 125.5,
+   "jeju": 122.32,
+   "total": 125.47,
+   "first_seen": null,
+   "history": []
+  },
+  "202506": {
+   "land": 118.02,
+   "jeju": 120.62,
+   "total": 118.05,
+   "first_seen": null,
+   "history": []
+  },
+  "202507": {
+   "land": 120.39,
+   "jeju": 121.13,
+   "total": 120.39,
+   "first_seen": null,
+   "history": []
+  },
+  "202508": {
+   "land": 117.39,
+   "jeju": 118.46,
+   "total": 117.4,
+   "first_seen": null,
+   "history": []
+  },
+  "202509": {
+   "land": 112.9,
+   "jeju": 114.06,
+   "total": 112.91,
+   "first_seen": null,
+   "history": []
+  },
+  "202510": {
+   "land": 101.53,
+   "jeju": 101.17,
+   "total": 101.53,
+   "first_seen": null,
+   "history": []
+  },
+  "202511": {
+   "land": 94.8,
+   "jeju": 95.82,
+   "total": 94.81,
+   "first_seen": null,
+   "history": []
+  },
+  "202512": {
+   "land": 90.43,
+   "jeju": 91.03,
+   "total": 90.44,
+   "first_seen": null,
+   "history": []
+  },
+  "202601": {
+   "land": 103.54,
+   "jeju": 102.94,
+   "total": 103.53,
+   "first_seen": null,
+   "history": []
+  },
+  "202602": {
+   "land": 108.52,
+   "jeju": 108.47,
+   "total": 108.52,
+   "first_seen": null,
+   "history": []
+  },
+  "202603": {
+   "land": 110.03,
+   "jeju": 106.77,
+   "total": 109.99,
+   "first_seen": null,
+   "history": []
+  },
+  "202604": {
+   "land": 118.94,
+   "jeju": 117.24,
+   "total": 118.92,
+   "first_seen": null,
+   "history": []
+  },
+  "202605": {
+   "land": 121.36,
+   "jeju": 118.26,
+   "total": 121.32,
+   "first_seen": null,
+   "history": []
+  },
+  "202606": {
+   "land": 114.11,
+   "jeju": 113.44,
+   "total": 114.1,
+   "first_seen": null,
+   "history": []
+  },
+  "202607": {
+   "land": 133.79,
+   "jeju": 134.13,
+   "total": 133.8,
+   "first_seen": null,
+   "history": []
+  },
+  "202608": {
+   "land": 148.39,
+   "jeju": 149.09,
+   "total": 148.39,
+   "first_seen": null,
+   "history": []
+  },
+  "202609": {
+   "land": 119.02,
+   "jeju": 118.97,
+   "total": 119.02,
+   "first_seen": null,
+   "history": []
+  }
+ },
+ "status": {
+  "at": "2026-10-17 23:31 KST",
+  "ok": true,
+  "note": "21개월 읽음"
+ },
+ "source": "https://new.kpx.or.kr/smpMonthly.es?mid=a10406030000",
+ "meta": {
+  "unit": "원/kWh",
+  "land": "육지 SMP",
+  "jeju": "제주 SMP",
+  "total": "통합 SMP",
+  "first_seen": "자동 수집으로 해당 월 값을 처음 확인한 날짜(KST). null = 수집 시작(2026-10-17) 전에 이미 게시됨",
+  "history": "게시 후 값이 바뀐 경우 이전 값과 변경 확인일"
+ },
+ "latest_month": "202609"
+}
