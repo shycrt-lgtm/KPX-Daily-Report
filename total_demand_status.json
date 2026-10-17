@@ -1,7 +1,43 @@
 {
- "ok": false,
+ "ok": true,
  "api": "https://apis.data.go.kr/B552115/sumperfuel5m/getSumperfuel5m",
- "note": "자료 미수신 — 기존 파일 유지",
- "log": [],
- "at": "2026-10-17 22:50 KST"
+ "note": "0일 갱신",
+ "log": [
+  "page2 항목 없음: {\"response\": {\"header\": {\"resultCode\": \"00\", \"resultMsg\": \"OK\"}, \"body\": {\"dataType\": \"JSON\", \"totalCount\": \"1\", \"numOfRows\": \"1000\", \"pageNo\": \"2\", \"items\": {\"item\": []}}}}"
+ ],
+ "response_fields": [
+  "bEmsw",
+  "baseDateTime",
+  "fuelPwr1",
+  "fuelPwr10",
+  "fuelPwr2",
+  "fuelPwr3",
+  "fuelPwr4",
+  "fuelPwr5",
+  "fuelPwr6",
+  "fuelPwr7",
+  "fuelPwr8",
+  "fuelPwr9",
+  "fuelPwrTot",
+  "pEsmw",
+  "rn"
+ ],
+ "sample_row": {
+  "fuelPwr7": "0.021972",
+  "fuelPwr8": "0.0",
+  "fuelPwr5": "0.0",
+  "pEsmw": "0.0",
+  "fuelPwr6": "13176.3",
+  "fuelPwrTot": "58047.4",
+  "fuelPwr9": "1316.82",
+  "bEmsw": "0.0",
+  "baseDateTime": "20261017224500",
+  "fuelPwr10": "2613.72",
+  "rn": "1",
+  "fuelPwr3": "19941.9",
+  "fuelPwr4": "20807.1",
+  "fuelPwr1": "55.1693",
+  "fuelPwr2": "136.016"
+ },
+ "at": "2026-10-17 22:51 KST"
 }
