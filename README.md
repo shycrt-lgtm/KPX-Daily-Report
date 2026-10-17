@@ -46,10 +46,18 @@
 
 ## total_demand.json
 
-`meta.response_fields`에 API 실제 응답 필드가 기록됨.
-`days.{YYYYMMDD}`: `market`(시장수요), `ppa`(PPA 추정), `btm`(BTM 추정), `total`(합계) 시간대별 24개(MW, 0번 = 00시대), `complete`.
-출처: 공공데이터포털 한국전력거래소_발전원별 발전량 현황조회. 현재 기존 API는 시장수요(fuelPwrTot)만 제공하며, PPA(pEsmw)·BTM(bEmsw) 추정은 데이터셋 15158491(현황조회_GW) 활용신청 후 워크플로의 DEMAND_API_URL에 주소를 넣어야 수집됨. 그 전까지 ppa·btm·total은 null.
+`days.{YYYYMMDD}`: 시간대별 24개(MW, 0번 = 00시대)
+- `market`: 시장수요(fuelPwrTot) — 5분 자료의 시간 평균, 하루 2회 수집(최근 10일 보정)
+- `ppa` / `btm`: PPA 추정(pEsmw) / BTM 추정(bEmsw) — 매시간 1회 조회한 현재 5분 값(시간대 대표 표본). `sample_time`이 실제 기준시각
+- `total`: market + ppa + btm. 세 값이 모두 있는 시간대만
+- `complete`, `hours`(항목별 수록 시간 수)
+
+출처: 시장수요 — 공공데이터포털 한국전력거래소_발전원별 발전량 현황조회(PwrAmountByGen) / PPA·BTM — 같은 기관 현황조회_GW(sumperfuel5m, 이력 없이 현재값만 제공).
+PPA·BTM은 2026-10-17부터 수집하며, 이전 기간과 수집이 누락된 시간대는 null. 수집 상태는 `total_demand_status.json`.
+
+`monthly_summary.json`의 `national_demand.energy_gwh`는 해당 항목이 월 전체 수록된 경우만 값이 있고, 일부만 있으면 `partial_gwh`(월 합계 아님)에 표시.
 
 ## 갱신
 
-GitHub Actions(`daily_report.yml`)가 매일 KST 00:00, 07:20 실행: `build_report.py` → `collect_kpx_smp.py`·`apply_kpx_smp.py` → `make_recent.py` → `collect_total_demand.py` → `build_monthly.py`
+- `daily_report.yml`(매일 KST 00:00, 07:20): `build_report.py` → `collect_kpx_smp.py`·`apply_kpx_smp.py` → `make_recent.py` → `collect_total_demand.py`(시장수요) → `build_monthly.py`
+- `smp_live.yml`(매시간): 하루전 SMP 수집 → `collect_total_demand.py --snapshot`(PPA·BTM) → `build_monthly.py`

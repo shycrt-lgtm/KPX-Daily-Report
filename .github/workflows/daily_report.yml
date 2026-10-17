@@ -49,12 +49,10 @@ jobs:
       - name: Make recent data (빠른 로딩용 data_recent.json)
         run: python make_recent.py
 
-      - name: Collect national total demand (국가 총수요 = 시장수요+PPA+BTM)
+      - name: Collect market demand (국가 총수요 중 시장수요, 5분 자료 시간 평균)
         continue-on-error: true
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
-          # 15158491 데이터셋 활용신청 후 받은 API 주소를 아래 따옴표 안에 입력 (비우면 시장수요만 수집)
-          DEMAND_API_URL: "https://apis.data.go.kr/B552115/sumperfuel5m/getSumperfuel5m"
         run: python collect_total_demand.py
 
       - name: Build monthly summary (월별 발전량·최대전력·총수요 요약)

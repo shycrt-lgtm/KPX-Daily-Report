@@ -106,7 +106,8 @@ def main():
                 "days": len(dks),
                 "hours_available": hrs,
                 "complete": all(hrs[k] == full for k in comps),
-                "energy_gwh": {k: (r1(tot[k] / 1000) if hrs[k] else None) for k in comps},
+                "energy_gwh": {k: (r1(tot[k] / 1000) if hrs[k] == full else None) for k in comps},
+                "partial_gwh": {k: r1(tot[k] / 1000) for k in comps if 0 < hrs[k] < full},
                 "max_total_mw": mx[0] if mx else None,
                 "max_total_at": f"{mx[1]} {mx[2]}" if mx else None,
             }
@@ -124,7 +125,7 @@ def main():
             "gen_copied_days": "원자력·석탄 시간대 값이 전일과 완전히 같은 날(수집 실패로 전일 값이 남았을 가능성). 해당 월 합계 신뢰도 낮음",
             "gen_days_without_ess": "ESS 충방전이 모두 0인 날 수(ESS 미제공 자료로 채운 날일 수 있음)",
             "avg_daily_peak_mw": "일별 최대전력의 월 평균 (EPSIS '최대/최소전력 월별평균'과 같은 개념)",
-            "national_demand": "시장수요 + PPA 추정 + BTM 추정 (MW 시간 평균의 월 합계 / 1000 = GWh). 항목별 수록 시간은 hours_available(월 전체 = 일수×24). 수록 시간이 0이면 null",
+            "national_demand": "시장수요 + PPA 추정 + BTM 추정 (MW 시간 평균의 월 합계 / 1000 = GWh). 항목별 수록 시간은 hours_available(월 전체 = 일수×24). energy_gwh는 해당 항목이 월 전체 수록된 경우만 값이 있고, 일부만 있으면 partial_gwh(수록 시간 합계, 월 합계 아님)에 표시. PPA·BTM은 매시간 1회 표본, 2026-10-17부터 수집",
             "smp": "월 SMP는 수록하지 않음 — KPX 공표 월별 SMP를 사용할 것",
         },
         "months": out_months,

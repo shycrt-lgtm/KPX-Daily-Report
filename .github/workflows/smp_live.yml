@@ -45,11 +45,22 @@ jobs:
       - name: Make recent data (빠른 로딩용 data_recent.json)
         run: python make_recent.py
 
+      - name: Snapshot PPA·BTM (국가 총수요 구성요소, 매시간 현재값 1건)
+        continue-on-error: true
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: python collect_total_demand.py --snapshot
+
+      - name: Build monthly summary
+        continue-on-error: true
+        run: python build_monthly.py
+
       - name: Commit
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add smp_live.json data.json data_recent.json
+          for f in total_demand.json total_demand_status.json monthly_summary.json; do if [ -f "$f" ]; then git add "$f"; fi; done
           git diff --staged --quiet && exit 0
           git commit -m "Auto: SMP live [$(date +'%Y-%m-%d %H:%M')]"
           for i in 1 2 3 4 5; do
