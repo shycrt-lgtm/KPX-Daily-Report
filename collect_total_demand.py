@@ -37,7 +37,7 @@ DIAG = []
 
 
 def write_status(ok, note=""):
-    json.dump({"ok": ok, "api": API_URL, "note": note, "log": DIAG[-6:],
+    json.dump({"ok": ok, "api": API_URL, "note": note, "log": DIAG[-6:], "response_fields": RESPONSE_FIELDS, "sample_row": SAMPLE_ROW,
                "at": datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")},
               open("total_demand_status.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
@@ -109,7 +109,7 @@ def fetch_rows(oldest):
             shown = True
         oldest_seen = None
         for x in items:
-            dt = str(x.get("baseDatetime", ""))[:14]
+            dt = "".join(ch for ch in str(x.get("baseDatetime") or x.get("baseDateTime") or x.get("baseDt") or "") if ch.isdigit())[:14]
             if len(dt) < 10:
                 continue
             vals = [pick(x, FIELD_CANDIDATES[n]) for n in ("market", "ppa", "btm")]
