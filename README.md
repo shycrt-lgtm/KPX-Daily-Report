@@ -48,7 +48,7 @@
 
 `meta.response_fields`에 API 실제 응답 필드가 기록됨.
 `days.{YYYYMMDD}`: `market`(시장수요), `ppa`(PPA 추정), `btm`(BTM 추정), `total`(합계) 시간대별 24개(MW, 0번 = 00시대), `complete`.
-출처: 공공데이터포털 한국전력거래소_발전원별 발전량 현황조회. 응답 필드 fuelPwrTot·pEsmw·bEmsw.
+출처: 공공데이터포털 한국전력거래소_발전원별 발전량 현황조회. 현재 기존 API는 시장수요(fuelPwrTot)만 제공하며, PPA(pEsmw)·BTM(bEmsw) 추정은 데이터셋 15158491(현황조회_GW) 활용신청 후 워크플로의 DEMAND_API_URL에 주소를 넣어야 수집됨. 그 전까지 ppa·btm·total은 null.
 
 ## 갱신
 

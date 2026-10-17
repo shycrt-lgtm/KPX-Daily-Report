@@ -15,7 +15,9 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-API_URL = "https://apis.data.go.kr/B552115/PwrAmountByGen/getPwrAmountByGen"
+# PPA·BTM 추정은 별도 데이터셋(공공데이터포털 15158491, 발전원별 발전량 현황조회_GW)에서 제공.
+# 활용신청 후 받은 주소를 워크플로의 DEMAND_API_URL에 넣으면 그 주소로 수집. 비어 있으면 기존 API(시장수요만 제공).
+API_URL = os.environ.get("DEMAND_API_URL") or "https://apis.data.go.kr/B552115/PwrAmountByGen/getPwrAmountByGen"
 API_KEY = os.environ.get("DATA_GO_KR_KEY", "")
 OUT = "total_demand.json"
 KST = timezone(timedelta(hours=9))
@@ -141,7 +143,7 @@ def main():
             changed += 1
     store["latest_date"] = max(store["days"]) if store["days"] else None
     store["meta"] = {
-        "source": "공공데이터포털 한국전력거래소_발전원별 발전량 현황조회 (PwrAmountByGen)",
+        "source": API_URL,
         "unit": "MW (5분 자료의 시간대별 평균)",
         "fields": {"market": "시장수요 fuelPwrTot", "ppa": "PPA 추정 pEsmw", "btm": "BTM 추정 bEmsw",
                    "total": "market + ppa + btm (국가 총수요, 산출)"},
