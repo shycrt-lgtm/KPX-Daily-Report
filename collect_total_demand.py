@@ -25,7 +25,7 @@ SNAPSHOT_API = os.environ.get("DEMAND_API_URL") or "https://apis.data.go.kr/B552
 OUT = "total_demand.json"
 STATUS = "total_demand_status.json"
 LOOKBACK_DAYS = int(os.environ.get("DEMAND_LOOKBACK_DAYS", "10"))
-MAX_PAGES = 40
+MAX_PAGES = 60
 DIAG = []
 
 
@@ -121,7 +121,9 @@ def save(store, mode, note, ok=True):
 # ── 1) 시장수요: 5분 자료 → 시간 평균 ───────────────────────────────────
 def run_market():
     store = load()
-    oldest = (now_kst() - timedelta(days=LOOKBACK_DAYS)).strftime("%Y%m%d")
+    have = sum(1 for d in store["days"].values() if any(v is not None for v in d.get("market", [])))
+    lookback = LOOKBACK_DAYS if have >= 60 else 150      # 처음엔 길게 받아 추정 보정용 이력 확보
+    oldest = (now_kst() - timedelta(days=lookback)).strftime("%Y%m%d")
     today = now_kst().strftime("%Y%m%d")
     rows, page = {}, 1
     while page <= MAX_PAGES:
