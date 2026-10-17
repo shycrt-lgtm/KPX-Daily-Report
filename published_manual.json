@@ -1,0 +1,22 @@
+{
+ "_설명": "EPSIS 등 자동 수집이 안 되는 공표값을 월별로 입력하는 파일. 공표 후 값을 채우면 published_check.json에 웹 속보치와의 차이가 자동 계산됨. 모르는 항목은 null 또는 생략. SMP는 KPX 홈페이지에서 자동 수집되므로 입력 불필요",
+ "_항목": {
+  "peak_mw": "최대전력(MW)",
+  "peak_supply_capacity_mw": "최대전력 시 공급능력(MW)",
+  "peak_reserve_rate_pct": "공급예비율(%)",
+  "gen_trade_gwh": "EPSIS 전력거래량(전력시장, GWh): 원자력·유연탄·무연탄·LNG·신재생·양수·유류·기타",
+  "national_demand_gwh": "국가 총수요(GWh, 공표되는 경우)",
+  "source": "출처·확인일"
+ },
+ "months": {
+  "202509": {
+   "peak_mw": 89532, "peak_supply_capacity_mw": 100937, "peak_reserve_rate_pct": 12.7,
+   "gen_trade_gwh": {"원자력": 13520.6, "유연탄": 18113.1, "무연탄": 89.9, "LNG": 11376.8, "신재생": 3146.4, "양수": 294.4, "유류": 51.7, "기타": 69.3},
+   "source": "EPSIS 전력수급실적·전력거래량 (2026-09 전력시장 임원보고 근거표, 2026-10-17 확인)"
+  },
+  "202609": {
+   "peak_mw": 85902, "peak_supply_capacity_mw": 103056, "peak_reserve_rate_pct": 20.0,
+   "source": "EPSIS 전력수급실적 (2026-09 전력시장 임원보고 근거표, 2026-10-17 확인)"
+  }
+ }
+}

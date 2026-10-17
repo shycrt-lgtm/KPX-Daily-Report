@@ -55,6 +55,10 @@ jobs:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python collect_total_demand.py
 
+      - name: Collect KPX monthly SMP (월별 SMP 공표값·공표일 기록)
+        continue-on-error: true
+        run: python collect_kpx_monthly_smp.py
+
       - name: Estimate national total demand (실측 우선, 빈 시간은 발전량 기반 추정)
         continue-on-error: true
         run: python estimate_demand.py
@@ -63,12 +67,16 @@ jobs:
         continue-on-error: true
         run: python build_monthly.py
 
+      - name: Build published check (속보치 vs 공표값 대조표)
+        continue-on-error: true
+        run: python build_check.py
+
       - name: Cleanup Old HTMLs and Commit SPA
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add index.html data.json data_recent.json smp_live.json
-          for f in total_demand.json total_demand_status.json demand_estimate.json monthly_summary.json; do if [ -f "$f" ]; then git add "$f"; fi; done
+          for f in total_demand.json total_demand_status.json demand_estimate.json monthly_summary.json kpx_monthly_smp.json published_check.json; do if [ -f "$f" ]; then git add "$f"; fi; done
           git diff --staged --quiet || git commit -m "Auto: Update SPA master data.json [$(date +'%Y-%m-%d')]"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main && exit 0

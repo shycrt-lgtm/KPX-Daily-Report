@@ -33,6 +33,9 @@ def r1(x):
 def main():
     master = json.load(open("data.json", encoding="utf-8"))
     days = master["days"]
+    kpx_smp = {}
+    if os.path.exists("kpx_monthly_smp.json"):
+        kpx_smp = json.load(open("kpx_monthly_smp.json", encoding="utf-8")).get("months", {})
     demand = {}
     if os.path.exists("demand_estimate.json"):       # 실측 우선, 빈 시간은 추정으로 채운 최선값
         demand = json.load(open("demand_estimate.json", encoding="utf-8")).get("days", {})
@@ -68,6 +71,28 @@ def main():
         res = [days[d]["cap_res"] for d in ks if days[d].get("cap_res") is not None]
         peak = max(peaks) if peaks else None
 
+        # ── 월 SMP 속보치: 시간대별 육지 SMP를 시장수요(없으면 전원별 출력 합계)로 가중평균 ──
+        num_w = den_w = 0.0
+        w_hours = w_est = 0
+        for d in ks:
+            smp = days[d].get("smp_hourly") or []
+            dm = (demand.get(d) or {}).get("market") or [None] * 24
+            g = days[d].get("gen") or {}
+            for h in range(min(24, len(smp))):
+                w = dm[h]
+                if w is None and all(len(g.get(k, [])) == 24 for k in GEN_KEYS):
+                    w = sum(g[k][h] for k in GEN_KEYS if k != "net_load")
+                    w_est += 1
+                if w is None or smp[h] is None:
+                    continue
+                num_w += smp[h] * w
+                den_w += w
+                w_hours += 1
+        pub = kpx_smp.get(ym, {})
+
+        peak_day = max(peaks)[1] if peaks else None
+        pk7 = next((x for x in (days[peak_day].get("recent_7") or []) if x.get("peak") == days[peak_day].get("cap_peak")), {}) if peak_day else {}
+
         rec = {
             "days_in_data": len(ks),
             "days_in_month": n_cal,
@@ -82,6 +107,14 @@ def main():
             "peak_time": peak[2] if peak else None,
             "avg_daily_peak_mw": r1(sum(p[0] for p in peaks) / len(peaks)) if peaks else None,
             "avg_reserve_rate_pct": round(sum(res) / len(res), 2) if res else None,
+            "peak_supply_capacity_mw": pk7.get("cap"),
+            "peak_reserve_rate_pct": days[peak_day].get("cap_res") if peak_day else None,
+            "smp_land_weighted_est": round(num_w / den_w, 2) if den_w else None,
+            "smp_weight_hours": w_hours,
+            "smp_land_published": pub.get("land"),
+            "smp_jeju_published": pub.get("jeju"),
+            "smp_total_published": pub.get("total"),
+            "smp_published_first_seen": pub.get("first_seen"),
         }
 
         # ── 국가 총수요 ──
@@ -135,7 +168,10 @@ def main():
             "national_demand": "국가 총수요 = 시장수요 + PPA 추정 + BTM 추정 (demand_estimate.json 기준, GWh). API 실측을 우선 쓰고 빈 시간은 추정으로 채움. "
                                "estimated_share_pct = 추정으로 채운 시간 비율(%) — 0보다 크면 [추정] 포함으로 표기할 것. market_calib_outside = 실측 범위 밖 보정 사용 여부. "
                                "energy_gwh는 월 전체 시간이 채워진 항목만 값이 있고, 일부만 있으면 partial_gwh(월 합계 아님)",
-            "smp": "월 SMP는 수록하지 않음 — KPX 공표 월별 SMP를 사용할 것",
+            "smp_land_published": "KPX 홈페이지 월별 SMP(육지) 공표값. jeju·total도 같음. 있으면 이 값을 사용",
+            "smp_land_weighted_est": "월 SMP 속보치(육지): 시간대별 SMP를 시장수요로 가중평균 [산출]. 공표값과 0.2~0.6원 차이(2026-08·09 검증). 공표값이 없을 때만 '속보치'로 사용",
+            "smp_published_first_seen": "KPX 홈페이지에서 해당 월 값을 처음 확인한 날짜. null이면 수집 시작 전 게시",
+            "peak_supply_capacity_mw / peak_reserve_rate_pct": "월 최대전력 발생일의 공급능력과 공급예비율(EPSIS 월 실적과 같은 개념)",
         },
         "months": out_months,
     }

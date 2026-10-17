@@ -7,7 +7,10 @@
 
 | 파일 | 크기 | 내용 |
 |---|---|---|
-| `monthly_summary.json` | 약 30KB | 월별 전원별 발전량(GWh), 최대전력, 월평균 일최대전력, 평균 예비율, 국가 총수요 |
+| `monthly_summary.json` | 약 50KB | 월별 SMP(공표값·속보치), 전원별 발전량(GWh), 최대전력·공급능력·예비율, 국가 총수요 |
+| `published_check.json` | 작음 | 속보치 vs 공표값 대조표, 지표별 누적 오차 |
+| `kpx_monthly_smp.json` | 작음 | KPX 홈페이지 월별 SMP(육지·제주·통합) 공표값과 처음 확인한 날짜 |
+| `published_manual.json` | 작음 | EPSIS 공표값 수기 입력용 — 공표 후 이 파일에 값을 넣으면 대조표에 반영 |
 | `smp_live.json` | 수 KB | 금일 하루전시장 SMP |
 | `data_recent.json` | 약 350KB | 최근 60일 일별 상세(시간대별 SMP·전원별 출력) + LNG 요금 |
 | `demand_estimate.json` | 약 500KB | 국가 총수요 시간대별 최선값(API 실측 우선, 빈 시간은 추정) — 2025년 이후 |
@@ -29,7 +32,9 @@
 - `avg_daily_peak_mw`: 일최대전력의 월 평균
 - `avg_reserve_rate_pct`: 일별 공급예비율(최대전력 시점)의 월 단순평균
 - `national_demand`: 국가 총수요(있는 월만) — `energy_gwh`(market 시장수요 / ppa PPA 추정 / btm BTM 추정 / total 합계), `hours_available`(항목별 수록 시간), `max_total_mw`
-- 월 SMP는 수록하지 않음 → KPX 공표 월별 SMP 사용
+- `smp_land_published`(jeju·total): KPX 홈페이지 월별 SMP 공표값. `smp_published_first_seen`: 처음 확인한 날짜(null = 수집 시작 전 게시)
+- `smp_land_weighted_est`: 월 SMP 속보치(육지) = 시간대별 SMP를 시장수요로 가중평균. 2025-01~2026-09 21개월 대조 평균 −0.13%, 최대 0.5% 차이. 공표값이 없을 때만 사용
+- `peak_supply_capacity_mw`, `peak_reserve_rate_pct`: 월 최대전력 발생일의 공급능력·예비율(EPSIS 월 실적과 같은 개념, 2025-09·2026-09 일치 확인)
 
 ## data_recent.json / data.json
 
@@ -67,5 +72,5 @@ API가 비거나 실패한 시간을 수집 중인 발전량으로 채운 국가
 
 ## 갱신
 
-- `daily_report.yml`(매일 KST 00:00, 07:20): `build_report.py` → `collect_kpx_smp.py`·`apply_kpx_smp.py` → `make_recent.py` → `collect_total_demand.py`(시장수요) → `estimate_demand.py` → `build_monthly.py`
-- `smp_live.yml`(매시간): 하루전 SMP 수집 → `collect_total_demand.py --snapshot`(PPA·BTM) → `estimate_demand.py` → `build_monthly.py`
+- `daily_report.yml`(매일 KST 00:00, 07:20): `build_report.py` → `collect_kpx_smp.py`·`apply_kpx_smp.py` → `make_recent.py` → `collect_total_demand.py`(시장수요) → `collect_kpx_monthly_smp.py` → `estimate_demand.py` → `build_monthly.py` → `build_check.py`
+- `smp_live.yml`(매시간): 하루전 SMP 수집 → `collect_total_demand.py --snapshot`(PPA·BTM) → `estimate_demand.py` → `build_monthly.py` → `build_check.py`
