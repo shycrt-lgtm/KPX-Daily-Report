@@ -33,14 +33,30 @@ FIELD_CANDIDATES = {
 }
 
 
+DIAG = []
+
+
+def write_status(ok, note=""):
+    json.dump({"ok": ok, "api": API_URL, "note": note, "log": DIAG[-6:],
+               "at": datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")},
+              open("total_demand_status.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+
 def http_json(params, attempts=3):
     for i in range(1, attempts + 1):
         try:
             r = requests.get(API_URL, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20, 60))
+            body = r.text.replace(API_KEY, "***") if API_KEY else r.text
             if r.status_code == 200:
-                return r.json()
-            print(f">> [총수요] HTTP {r.status_code} ({i}/{attempts})")
+                try:
+                    return r.json()
+                except ValueError:
+                    DIAG.append(f"page{params.get('pageNo')} rows{params.get('numOfRows')} HTTP200 비JSON: {body[:300]}")
+            else:
+                DIAG.append(f"page{params.get('pageNo')} rows{params.get('numOfRows')} HTTP{r.status_code}: {body[:300]}")
+            print(">> [총수요]", DIAG[-1])
         except Exception as e:
+            DIAG.append(f"통신 실패 {type(e).__name__}")
             print(f">> [총수요] 통신 실패 {type(e).__name__} ({i}/{attempts})")
         time.sleep(5 * i)
     return None
@@ -78,6 +94,10 @@ def fetch_rows(oldest):
             break
         items = items_of(data)
         if not items:
+            DIAG.append(f"page{page} 항목 없음: {json.dumps(data, ensure_ascii=False)[:300]}")
+            if page == 1 and size > 100:
+                size = 100          # 한 번에 받을 수 있는 행 수가 작은 API 대비
+                continue
             break
         if not shown:
             print(">> [총수요] 응답 필드 목록:", sorted(items[0].keys()))
@@ -129,6 +149,7 @@ def main():
     oldest = (datetime.now(KST) - timedelta(days=LOOKBACK_DAYS)).strftime("%Y%m%d")
     rows = fetch_rows(oldest)
     if not rows:
+        write_status(False, "자료 미수신 — 기존 파일 유지")
         sys.exit(">> [총수요] 자료를 받지 못했습니다 — 기존 파일 유지")
 
     changed = 0
@@ -158,6 +179,7 @@ def main():
     old = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else ""
     if new != old:
         open(OUT, "w", encoding="utf-8").write(new)
+    write_status(True, f"{changed}일 갱신")
     print(f">> [총수요] {changed}일 갱신, 보유 {len(store['days'])}일, 최신 {store['latest_date']}")
 
 

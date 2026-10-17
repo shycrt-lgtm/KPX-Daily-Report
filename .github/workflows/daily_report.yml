@@ -66,7 +66,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add index.html data.json data_recent.json smp_live.json
-          for f in total_demand.json monthly_summary.json; do if [ -f "$f" ]; then git add "$f"; fi; done
+          for f in total_demand.json total_demand_status.json monthly_summary.json; do if [ -f "$f" ]; then git add "$f"; fi; done
           git diff --staged --quiet || git commit -m "Auto: Update SPA master data.json [$(date +'%Y-%m-%d')]"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main && exit 0
