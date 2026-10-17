@@ -27,7 +27,7 @@
 - `peak_mw`, `peak_date`, `peak_time`: 월 최대전력과 발생 일시
 - `avg_daily_peak_mw`: 일최대전력의 월 평균
 - `avg_reserve_rate_pct`: 일별 공급예비율(최대전력 시점)의 월 단순평균
-- `national_demand`: 국가 총수요(있는 월만) — `energy_gwh`(market 시장수요 / ppa PPA 추정 / btm BTM 추정 / total 합계), `max_total_mw`, `missing_hours`
+- `national_demand`: 국가 총수요(있는 월만) — `energy_gwh`(market 시장수요 / ppa PPA 추정 / btm BTM 추정 / total 합계), `hours_available`(항목별 수록 시간), `max_total_mw`
 - 월 SMP는 수록하지 않음 → KPX 공표 월별 SMP 사용
 
 ## data_recent.json / data.json
@@ -46,6 +46,7 @@
 
 ## total_demand.json
 
+`meta.response_fields`에 API 실제 응답 필드가 기록됨.
 `days.{YYYYMMDD}`: `market`(시장수요), `ppa`(PPA 추정), `btm`(BTM 추정), `total`(합계) 시간대별 24개(MW, 0번 = 00시대), `complete`.
 출처: 공공데이터포털 한국전력거래소_발전원별 발전량 현황조회. 응답 필드 fuelPwrTot·pEsmw·bEmsw.
 

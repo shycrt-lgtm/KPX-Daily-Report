@@ -87,24 +87,26 @@ def main():
         # ── 국가 총수요 ──
         dks = sorted(d for d in demand if d.startswith(ym))
         if dks:
-            tot = {"market": 0.0, "ppa": 0.0, "btm": 0.0, "total": 0.0}
-            hrs, missing, mx = 0, 0, None
+            comps = ["market", "ppa", "btm", "total"]
+            tot = {k: 0.0 for k in comps}
+            hrs = {k: 0 for k in comps}
+            mx = None
             for d in dks:
                 for h in range(24):
-                    vals = {k: demand[d][k][h] for k in tot}
-                    if vals["total"] is None:
-                        missing += 1
-                        continue
-                    for k in tot:
-                        tot[k] += vals[k]
-                    hrs += 1
-                    if mx is None or vals["total"] > mx[0]:
-                        mx = (vals["total"], d, f"{h:02d}시대")
+                    for k in comps:
+                        v = (demand[d].get(k) or [None] * 24)[h]
+                        if v is not None:
+                            tot[k] += v
+                            hrs[k] += 1
+                    v = (demand[d].get("total") or [None] * 24)[h]
+                    if v is not None and (mx is None or v > mx[0]):
+                        mx = (v, d, f"{h:02d}시대")
+            full = n_cal * 24
             rec["national_demand"] = {
                 "days": len(dks),
-                "complete": len(dks) == n_cal and missing == 0,
-                "missing_hours": missing,
-                "energy_gwh": {k: r1(v / 1000) for k, v in tot.items()},
+                "hours_available": hrs,
+                "complete": all(hrs[k] == full for k in comps),
+                "energy_gwh": {k: (r1(tot[k] / 1000) if hrs[k] else None) for k in comps},
                 "max_total_mw": mx[0] if mx else None,
                 "max_total_at": f"{mx[1]} {mx[2]}" if mx else None,
             }
@@ -122,7 +124,7 @@ def main():
             "gen_copied_days": "원자력·석탄 시간대 값이 전일과 완전히 같은 날(수집 실패로 전일 값이 남았을 가능성). 해당 월 합계 신뢰도 낮음",
             "gen_days_without_ess": "ESS 충방전이 모두 0인 날 수(ESS 미제공 자료로 채운 날일 수 있음)",
             "avg_daily_peak_mw": "일별 최대전력의 월 평균 (EPSIS '최대/최소전력 월별평균'과 같은 개념)",
-            "national_demand": "시장수요 + PPA 추정 + BTM 추정 (MW 시간 평균의 월 합계 / 1000 = GWh). 시간대가 비면 missing_hours로 표시",
+            "national_demand": "시장수요 + PPA 추정 + BTM 추정 (MW 시간 평균의 월 합계 / 1000 = GWh). 항목별 수록 시간은 hours_available(월 전체 = 일수×24). 수록 시간이 0이면 null",
             "smp": "월 SMP는 수록하지 않음 — KPX 공표 월별 SMP를 사용할 것",
         },
         "months": out_months,

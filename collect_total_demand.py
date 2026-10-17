@@ -22,6 +22,8 @@ KST = timezone(timedelta(hours=9))
 LOOKBACK_DAYS = int(os.environ.get("DEMAND_LOOKBACK_DAYS", "10"))   # 최근 며칠까지 다시 받아 보정할지
 MAX_PAGES = 40
 
+RESPONSE_FIELDS, SAMPLE_ROW = [], {}
+
 FIELD_CANDIDATES = {
     "market": ["fuelPwrTot"],
     "ppa": ["pEsmw", "pEsMw", "ppaEsmw"],
@@ -65,6 +67,7 @@ def pick(x, keys):
 
 def fetch_rows(oldest):
     """최신 자료부터 oldest(YYYYMMDD) 이전 자료가 나올 때까지. 반환 {YYYYMMDD: {HH: [[market, ppa, btm], ...]}}"""
+    global RESPONSE_FIELDS, SAMPLE_ROW
     rows, page, size, shown = {}, 1, 1000, False
     while page <= MAX_PAGES:
         data = http_json({"serviceKey": API_KEY, "pageNo": page, "numOfRows": size, "dataType": "json"})
@@ -76,6 +79,8 @@ def fetch_rows(oldest):
             break
         if not shown:
             print(">> [총수요] 응답 필드 목록:", sorted(items[0].keys()))
+            RESPONSE_FIELDS = sorted(items[0].keys())
+            SAMPLE_ROW = {k: str(v)[:20] for k, v in items[0].items()}
             missing = [n for n, ks in FIELD_CANDIDATES.items() if not any(k in items[0] for k in ks)]
             if missing:
                 print(f">> [총수요 경고] 응답에 없는 항목: {missing} — FIELD_CANDIDATES의 필드 이름을 확인하세요.")
@@ -143,6 +148,8 @@ def main():
         "hour_index": "배열 0번 = 00시대(00:00~00:55 자료 평균), 23번 = 23시대",
         "region": "API 설명상 육지·제주 포함 — 확인 필요",
         "complete": "24개 시간대 모두 5분 자료 6건 이상이면 true",
+        "response_fields": RESPONSE_FIELDS,
+        "sample_row": SAMPLE_ROW,
         "updated_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M KST"),
     }
     new = json.dumps(store, ensure_ascii=False, separators=(",", ":"))
