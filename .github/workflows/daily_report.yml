@@ -49,11 +49,22 @@ jobs:
       - name: Make recent data (빠른 로딩용 data_recent.json)
         run: python make_recent.py
 
+      - name: Collect national total demand (국가 총수요 = 시장수요+PPA+BTM)
+        continue-on-error: true
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: python collect_total_demand.py
+
+      - name: Build monthly summary (월별 발전량·최대전력·총수요 요약)
+        continue-on-error: true
+        run: python build_monthly.py
+
       - name: Cleanup Old HTMLs and Commit SPA
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add index.html data.json data_recent.json smp_live.json
+          for f in total_demand.json monthly_summary.json; do if [ -f "$f" ]; then git add "$f"; fi; done
           git diff --staged --quiet || git commit -m "Auto: Update SPA master data.json [$(date +'%Y-%m-%d')]"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main && exit 0
