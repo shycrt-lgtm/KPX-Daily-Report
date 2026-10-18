@@ -1,9 +1,13 @@
 {
  "snapshot": {
-  "ok": true,
-  "note": "20261018 10시대 기록 (기준 1020, PPA 3280.49, BTM 911.196)",
-  "log": [],
-  "at": "2026-10-18 10:30 KST"
+  "ok": false,
+  "note": "현재값 미수신",
+  "log": [
+   "getSumperfuel5m 통신 실패 ConnectTimeout",
+   "getSumperfuel5m 통신 실패 ConnectTimeout",
+   "getSumperfuel5m 통신 실패 ConnectTimeout"
+  ],
+  "at": "2026-10-18 11:32 KST"
  },
  "market": {
   "ok": true,
