@@ -1,11 +1,13 @@
 {
  "snapshot": {
-  "ok": true,
-  "note": "20261019 03시대 기록 (기준 0320, PPA 0.0, BTM 0.0)",
+  "ok": false,
+  "note": "현재값 미수신",
   "log": [
-   "getSumperfuel5m 통신 실패 ReadTimeout"
+   "getSumperfuel5m 통신 실패 ConnectTimeout",
+   "getSumperfuel5m 통신 실패 ConnectTimeout",
+   "getSumperfuel5m 통신 실패 ConnectTimeout"
   ],
-  "at": "2026-10-19 03:27 KST"
+  "at": "2026-10-19 04:27 KST"
  },
  "market": {
   "ok": true,
