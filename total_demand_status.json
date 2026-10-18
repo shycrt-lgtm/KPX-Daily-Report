@@ -1,9 +1,11 @@
 {
  "snapshot": {
   "ok": true,
-  "note": "20261019 02시대 기록 (기준 0215, PPA 0.0, BTM 0.0)",
-  "log": [],
-  "at": "2026-10-19 02:23 KST"
+  "note": "20261019 03시대 기록 (기준 0320, PPA 0.0, BTM 0.0)",
+  "log": [
+   "getSumperfuel5m 통신 실패 ReadTimeout"
+  ],
+  "at": "2026-10-19 03:27 KST"
  },
  "market": {
   "ok": true,
