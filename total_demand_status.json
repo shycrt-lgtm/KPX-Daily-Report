@@ -1,13 +1,9 @@
 {
  "snapshot": {
-  "ok": false,
-  "note": "현재값 미수신",
-  "log": [
-   "getSumperfuel5m 통신 실패 ConnectTimeout",
-   "getSumperfuel5m 통신 실패 ConnectTimeout",
-   "getSumperfuel5m 통신 실패 ConnectTimeout"
-  ],
-  "at": "2026-10-20 15:40 KST"
+  "ok": true,
+  "note": "20261020 16시대 기록 (기준 1630, PPA 787.256, BTM 318.697)",
+  "log": [],
+  "at": "2026-10-20 16:39 KST"
  },
  "market": {
   "ok": true,
