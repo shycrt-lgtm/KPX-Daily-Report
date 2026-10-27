@@ -1,9 +1,13 @@
 {
  "snapshot": {
-  "ok": true,
-  "note": "20261027 15시대 기록 (기준 1530, PPA 10480.1, BTM 3256.79)",
-  "log": [],
-  "at": "2026-10-27 16:39 KST"
+  "ok": false,
+  "note": "현재값 미수신",
+  "log": [
+   "getSumperfuel5m 통신 실패 ConnectTimeout",
+   "getSumperfuel5m 통신 실패 ConnectTimeout",
+   "getSumperfuel5m 통신 실패 ConnectTimeout"
+  ],
+  "at": "2026-10-27 23:25 KST"
  },
  "market": {
   "ok": true,
