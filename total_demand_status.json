@@ -1,11 +1,9 @@
 {
  "snapshot": {
   "ok": true,
-  "note": "20261030 10시대 기록 (기준 1040, PPA 10108.0, BTM 3101.32)",
-  "log": [
-   "getSumperfuel5m 통신 실패 ReadTimeout"
-  ],
-  "at": "2026-10-30 10:49 KST"
+  "note": "20261030 17시대 기록 (기준 1720, PPA 920.087, BTM 307.778)",
+  "log": [],
+  "at": "2026-10-30 17:28 KST"
  },
  "market": {
   "ok": true,
