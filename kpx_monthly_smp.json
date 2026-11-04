@@ -146,12 +146,19 @@
    "total": 119.02,
    "first_seen": null,
    "history": []
+  },
+  "202610": {
+   "land": 110.05,
+   "jeju": 107.28,
+   "total": 110.02,
+   "first_seen": "2026-11-04",
+   "history": []
   }
  },
  "status": {
-  "at": "2026-11-04 05:50 KST",
+  "at": "2026-11-04 11:27 KST",
   "ok": true,
-  "note": "21개월 읽음"
+  "note": "22개월 읽음"
  },
  "source": "https://new.kpx.or.kr/smpMonthly.es?mid=a10406030000",
  "meta": {
@@ -162,5 +169,5 @@
   "first_seen": "자동 수집으로 해당 월 값을 처음 확인한 날짜(KST). null = 수집 시작(2026-10-17) 전에 이미 게시됨",
   "history": "게시 후 값이 바뀐 경우 이전 값과 변경 확인일"
  },
- "latest_month": "202609"
+ "latest_month": "202610"
 }
