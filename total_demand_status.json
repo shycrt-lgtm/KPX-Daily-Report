@@ -6,9 +6,13 @@
   "at": "2026-11-04 23:16 KST"
  },
  "market": {
-  "ok": true,
-  "note": "0일 갱신",
-  "log": [],
-  "at": "2026-11-04 11:27 KST"
+  "ok": false,
+  "note": "자료 미수신 — 기존 값 유지",
+  "log": [
+   "getPwrAmountByGen 통신 실패 ConnectTimeout",
+   "getPwrAmountByGen 통신 실패 ConnectTimeout",
+   "getPwrAmountByGen 통신 실패 ConnectTimeout"
+  ],
+  "at": "2026-11-05 06:10 KST"
  }
 }
